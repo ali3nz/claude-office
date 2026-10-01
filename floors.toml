@@ -1,0 +1,32 @@
+# Orchestra Office — Duo deployment building layout (replaces upstream demo).
+# Room ids are department slugs; the bridge assigns sessions to rooms by
+# sending project_dir=/orchestra/<slug> per event (mapper basename fallback).
+building_name = "Orchestra Office"
+
+[[floors]]
+name = "Executive"
+floor_number = 4
+accent = "#d4a017"
+icon = "🏢"
+repos = ["executive", "consultation", "boardroom"]
+
+[[floors]]
+name = "Implementation"
+floor_number = 3
+accent = "#2563eb"
+icon = "💻"
+repos = ["implementation"]
+
+[[floors]]
+name = "Review and Validation"
+floor_number = 2
+accent = "#7c3aed"
+icon = "🔍"
+repos = ["review", "validation"]
+
+[[floors]]
+name = "Ops and Lounge"
+floor_number = 1
+accent = "#059669"
+icon = "☕"
+repos = ["ops", "lounge"]

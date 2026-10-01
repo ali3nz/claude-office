@@ -80,6 +80,28 @@ def office_name(display_name, visual_role, engine, run_number):
     return name, name + run_no
 
 
+def department_for(visual_role, engine, state, phase, transition):
+    role = str(visual_role or "")
+    eng = str(engine or "").lower()
+    if role == "CEO":
+        return "executive"
+    if role == "CONSULTANT" or "sol" in eng:
+        return "consultation"
+    st = str(state or "")
+    ph = str(phase or "")
+    if st == "WAITING_FOR_OPERATOR" or (transition or "").startswith("operator_wait"):
+        return "boardroom"
+    if "REVIEW" in st or "REVIEW" in ph:
+        return "review"
+    if "VALIDAT" in st or "VALIDAT" in ph:
+        return "validation"
+    if st == "FAILED":
+        return "review"
+    if st == "IDLE":
+        return "lounge"
+    return "implementation"
+
+
 def orch_sid(run_number, agent_session):
     run_part = str(run_number) if run_number is not None else "x"
     return sanitize_sid("orch-" + run_part + "-" + str(agent_session or "x"))
@@ -116,11 +138,14 @@ def translate_kit(ev, live):
     engine = ev.get("engine")
     stamp = iso_from_ts(ev.get("ts"))
 
+    dept = department_for(ev.get("visualRole"), engine, state, phase, transition)
     def base(extra):
+        payload = dict(extra)
+        payload.setdefault("project_dir", "/orchestra/" + dept)
         body = {
             "session_id": sid,
             "timestamp": stamp,
-            "data": dict(extra),
+            "data": payload,
         }
         return body
 
@@ -138,7 +163,8 @@ def translate_kit(ev, live):
             "timestamp": stamp,
             "event_type": "session_start",
             "data": {"agent_name": clip("Sol R%s" % (run_number,), 64),
-                     "task_description": clip("consultation", 120)},
+                     "task_description": clip("consultation", 120),
+                     "project_dir": "/orchestra/consultation"},
         }
         return env, dedup_key("kit", ev.get("eventId"), transition, run_number), sol_sid
     if transition == "sol_consult_finished":
@@ -211,8 +237,10 @@ def translate_vocab(line, source, prefix, live_agents):
     activity = clip(line.get("activity") or "", 32)
 
     def base(event_type, extra):
+        payload = dict(extra)
+        payload.setdefault("project_dir", "/orchestra/implementation")
         return {"session_id": sid, "timestamp": stamp,
-                "event_type": event_type, "data": dict(extra)}
+                "event_type": event_type, "data": payload}
 
     if event == "tool_start":
         return base("pre_tool_use", {"tool_name": tool or "tool"}), key, sid
@@ -348,7 +376,8 @@ def run_once(state):
                 for other in [k for k, meta in live.items() if (meta or {}).get("run") == run_no and k != sid]:
                     sweep_env = {"session_id": other, "timestamp": iso_from_ts(item.get("ts")),
                                  "event_type": "session_end",
-                                 "data": {"reason": "run end sweep", "success": done}}
+                                 "data": {"reason": "run end sweep", "success": done,
+                                          "project_dir": "/orchestra/implementation"}}
                     sweep_key = dedup_key("kit-sweep", item.get("eventId"), other)
                     if sweep_key in sent_set:
                         continue
@@ -396,7 +425,14 @@ def selftest():
                                     {"e2e-coordinator": "orch-7-e2e-coordinator"})
     assert sid4 == "orch-7-e2e-coordinator", sid4
     assert env4["event_type"] == "post_tool_use", env4
-    print("selftest: 4 groups OK")
+    assert department_for("CEO", "coordinator", "COORDINATING", "TEST", "case_started") == "executive"
+    assert department_for("CONSULTANT", "openai-sol", "x", "y", "sol_consult_started") == "consultation"
+    assert department_for("WORKER", "freebuff", "WAITING_FOR_OPERATOR", "REVIEW", "x") == "boardroom"
+    assert department_for("WORKER", "freebuff", "REVIEWING", "REVIEW", "x") == "review"
+    assert department_for("WORKER", "freebuff", "VALIDATING", "VALIDATION", "x") == "validation"
+    assert department_for("WORKER", "freebuff", "IDLE", "x", "x") == "lounge"
+    assert department_for("WORKER", "freebuff", "IMPLEMENTING", "IMPLEMENT", "x") == "implementation"
+    print("selftest: 5 groups OK")
     return 0
 
 
