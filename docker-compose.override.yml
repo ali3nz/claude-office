@@ -7,6 +7,7 @@ services:
       - ./data/claude-ro:/claude-data:ro
     environment:
       - SUMMARY_ENABLED=${SUMMARY_ENABLED:-false}
+      - CLAUDE_OFFICE_ALLOW_CIDR=${CLAUDE_OFFICE_ALLOW_CIDR:-192.168.1.0/24}
     logging:
       driver: json-file
       options:

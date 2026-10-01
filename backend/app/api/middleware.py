@@ -9,6 +9,9 @@ inline version in ``main.py``.
 """
 
 import hmac
+import ipaddress
+import logging
+import os
 
 from fastapi import Request
 from fastapi.responses import JSONResponse
@@ -22,6 +25,22 @@ from app.config import get_settings
 settings = get_settings()
 
 _LOCALHOST_HOSTS = frozenset({"127.0.0.1", "::1", "localhost", "testclient"})
+
+logger = logging.getLogger(__name__)
+
+
+def _allowed_cidrs():
+    cidr_raw = os.environ.get("CLAUDE_OFFICE_ALLOW_CIDR", "")
+    nets = []
+    for part in cidr_raw.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        try:
+            nets.append(ipaddress.ip_network(part, strict=False))
+        except ValueError:
+            logger.warning("Ignoring invalid allowlist entry")
+    return nets
 
 
 class LocalhostOnlyMiddleware(BaseHTTPMiddleware):
@@ -37,7 +56,16 @@ class LocalhostOnlyMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next):  # type: ignore[override]
         client_host = request.client.host if request.client else None
-        if client_host not in _LOCALHOST_HOSTS:
+        if client_host in _LOCALHOST_HOSTS:
+            return await call_next(request)
+        permitted = False
+        if client_host:
+            try:
+                addr = ipaddress.ip_address(client_host)
+                permitted = any(addr in net for net in _allowed_cidrs())
+            except ValueError:
+                permitted = False
+        if not permitted:
             return JSONResponse(
                 status_code=403,
                 content={"detail": "Access denied: localhost only"},
