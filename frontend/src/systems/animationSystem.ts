@@ -17,6 +17,7 @@ import {
 } from "@/stores/gameStore";
 import { calculatePath, updateAgentObstacle } from "./pathfinding";
 import { collisionManager } from "./agentCollision";
+import { usePreferencesStore } from "@/stores/preferencesStore";
 import type { Position } from "@/types";
 
 // ============================================================================
@@ -161,10 +162,28 @@ class AnimationSystem {
   // MAIN TICK LOOP
   // ==========================================================================
 
+  // Duo low-resource display mode (plan section 22): hidden tabs do no
+  // animation work, and low-resource machines render at ~15fps. State
+  // updates arrive over WebSocket independently of this loop, so
+  // throttling animation never drops authoritative state.
+  private static readonly LOW_PERF_FRAME_MS = 66;
+
   private tick = (): void => {
     if (!this.state.isRunning) return;
 
     const now = performance.now();
+    if (typeof document !== "undefined" && document.hidden) {
+      this.state.lastTickTime = now;
+      this.state.rafId = requestAnimationFrame(this.tick);
+      return;
+    }
+    if (
+      usePreferencesStore.getState().lowResourceMode &&
+      now - this.state.lastTickTime < AnimationSystem.LOW_PERF_FRAME_MS
+    ) {
+      this.state.rafId = requestAnimationFrame(this.tick);
+      return;
+    }
     const deltaMs = now - this.state.lastTickTime;
     const deltaSeconds = deltaMs / 1000;
     this.state.lastTickTime = now;

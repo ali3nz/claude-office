@@ -28,6 +28,11 @@ export interface PreferencesState {
   toastAutoDismissLow: number;
   toastAutoDismissInfo: number;
 
+  // Duo deployment: per-machine display setting (localStorage only,
+  // never synced to the server — the wall display and the workstation
+  // need different values).
+  lowResourceMode: boolean;
+
   // Actions
   loadPreferences: () => Promise<void>;
   setClockType: (type: ClockType) => Promise<void>;
@@ -43,6 +48,7 @@ export interface PreferencesState {
   setToastFilterArrival: (enabled: boolean) => Promise<void>;
   setToastAutoDismissLow: (ms: number) => Promise<void>;
   setToastAutoDismissInfo: (ms: number) => Promise<void>;
+  setLowResourceMode: (enabled: boolean) => void;
 }
 
 // ============================================================================
@@ -109,7 +115,22 @@ export const usePreferencesStore = create<PreferencesState>()((set, get) => ({
   toastFilterArrival: DEFAULT_TOAST_FILTER_ARRIVAL,
   toastAutoDismissLow: DEFAULT_TOAST_AUTO_DISMISS_LOW,
   toastAutoDismissInfo: DEFAULT_TOAST_AUTO_DISMISS_INFO,
+  lowResourceMode:
+    typeof window !== "undefined" &&
+    window.localStorage.getItem("orchestra-office-low-resource") === "1",
   isLoaded: false,
+
+  setLowResourceMode: (enabled: boolean) => {
+    try {
+      window.localStorage.setItem(
+        "orchestra-office-low-resource",
+        enabled ? "1" : "0"
+      );
+    } catch {
+      // Storage may be unavailable; keep the in-memory value.
+    }
+    set({ lowResourceMode: enabled });
+  },
 
   loadPreferences: async () => {
     const prefs = await fetchPreferences();

@@ -7,6 +7,7 @@
 import { type ReactNode, useMemo, useCallback } from "react";
 import { Graphics, Texture } from "pixi.js";
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from "@/constants/canvas";
+import { ORCHESTRA_PALETTE } from "@/themes/orchestra-office";
 
 // ============================================================================
 // CONSTANTS
@@ -18,9 +19,9 @@ const WALL_TRIM_HEIGHT = 10;
 const FLOOR_TILE_SIZE = 100;
 
 // Colors
-const FLOOR_COLOR = 0x2a2a2a;
-const WALL_COLOR = 0x3d3d3d;
-const WALL_TRIM_COLOR = 0x4a4a4a;
+const FLOOR_COLOR = ORCHESTRA_PALETTE.floor;
+const WALL_COLOR = ORCHESTRA_PALETTE.wall;
+const WALL_TRIM_COLOR = ORCHESTRA_PALETTE.wallTrim;
 
 // ============================================================================
 // TYPES
