@@ -114,3 +114,4 @@ frontend/public/sprites/paid/
 docs/superpowers
 .cc2cc-session-id
 .co-api-key
+.co-ingest-key

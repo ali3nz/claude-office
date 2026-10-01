@@ -76,6 +76,25 @@ from app.services.git_service import git_service
 
 logger = logging.getLogger(__name__)
 
+
+# Duo deployment: per-session serialization locks.
+# Ingest acknowledges (2xx) after queueing background processing, so a
+# burst of same-session events could previously apply out of order
+# (last-writer-wins on session status). One asyncio.Lock per session id
+# keeps acceptance latency unchanged while guaranteeing in-order
+# application per session; different sessions still proceed
+# concurrently. asyncio locks grant in waiter order, and background
+# tasks are created in POST arrival order, so arrival order is kept.
+_session_locks: dict[str, asyncio.Lock] = {}
+
+
+def _lock_for_session(session_id: str) -> asyncio.Lock:
+    lock = _session_locks.get(session_id)
+    if lock is None:
+        lock = asyncio.Lock()
+        _session_locks[session_id] = lock
+    return lock
+
 # Prefixes stripped from paths when deriving display names.
 _DISPLAY_NAME_STRIP_PREFIXES = ("repos", "projects", "src", "work", "code", "github")
 
@@ -389,7 +408,8 @@ class EventProcessor:
         )
 
         try:
-            await self._process_event_internal(event)
+            async with _lock_for_session(event.session_id):
+                await self._process_event_internal(event)
         except Exception as e:
             logger.exception(f"Error processing event {event.event_type}: {e}")
             with contextlib.suppress(Exception):

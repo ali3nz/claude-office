@@ -127,7 +127,16 @@ class ApiKeyMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
 
         provided = request.headers.get("X-API-Key", "")
-        if not hmac.compare_digest(provided, settings.effective_api_key):
-            return JSONResponse(status_code=401, content={"detail": "Invalid API key"})
-
-        return await call_next(request)
+        is_admin = bool(settings.effective_api_key) and hmac.compare_digest(
+            provided, settings.effective_api_key)
+        ingest_key = settings.CLAUDE_OFFICE_INGEST_KEY or ""
+        is_ingest = bool(ingest_key) and hmac.compare_digest(provided, ingest_key)
+        if is_admin:
+            return await call_next(request)
+        if is_ingest:
+            ingest_path = settings.API_V1_STR + "/events"
+            if request.method == "POST" and request.url.path == ingest_path:
+                return await call_next(request)
+            return JSONResponse(status_code=403,
+                                content={"detail": "Ingest key is limited to event ingest"})
+        return JSONResponse(status_code=401, content={"detail": "Invalid API key"})

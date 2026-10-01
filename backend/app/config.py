@@ -101,6 +101,12 @@ class Settings(BaseSettings):
     # and WebSocket non-browser connections.
     CLAUDE_OFFICE_API_KEY: str = ""
 
+    # Duo deployment: ingest-scoped key for the observer bridge.
+    # When set, it authorizes ONLY event ingest; every other
+    # authenticated route still requires the admin key. Empty =
+    # single-key behaviour (upstream default).
+    CLAUDE_OFFICE_INGEST_KEY: str = ""
+
     # Auto-generated per-launch token. Used as the effective API key when
     # CLAUDE_OFFICE_API_KEY is not explicitly set. This ensures state-changing
     # endpoints always require an API key even in the default configuration.
