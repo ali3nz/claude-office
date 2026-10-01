@@ -19,6 +19,9 @@ RUN bun install --frozen-lockfile
 COPY frontend/ ./
 
 # Build static export
+ARG NEXT_PUBLIC_API_URL=http://192.168.1.240:8001
+ARG NEXT_PUBLIC_WS_URL=ws://192.168.1.240:8001
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL NEXT_PUBLIC_WS_URL=$NEXT_PUBLIC_WS_URL
 RUN bun run build
 
 # =============================================================================

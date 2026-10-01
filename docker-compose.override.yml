@@ -1,0 +1,20 @@
+# Claude Office Duo deployment adaptation (baseline, 2026-10-01).
+# Upstream docker-compose.yml untouched; this override isolates the stack:
+# loopback-only 8001 (8000 taken by nmap-viewer), distinct volume, log rotation.
+services:
+  claude-office:
+    ports:
+      - "127.0.0.1:8001:8000"
+    volumes:
+      - co-office-db:/app/data
+      - ./data/claude-ro:/claude-data:ro
+    environment:
+      - SUMMARY_ENABLED=${SUMMARY_ENABLED:-false}
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+volumes:
+  co-office-db:
+    name: co-office-db
