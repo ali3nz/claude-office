@@ -34,16 +34,34 @@ _LOCALHOST_HOSTS = frozenset({"localhost", "127.0.0.1", "::1"})
 def _allowed_ws_origins() -> frozenset[str]:
     """Origins permitted for WebSocket connections, derived from settings.
 
-    Filtered to loopback hosts so a CORS-config change can never open the
-    WebSocket stream to non-local origins.
+    Loopback origins stay permitted unconditionally (QA-014). A non-loopback
+    origin is additionally permitted only when its host is an IP inside the
+    same ``CLAUDE_OFFICE_ALLOW_CIDR`` allowlist that gates HTTP access
+    (Duo LAN display deployment, issue 207 round 2): the WebSocket trust
+    boundary therefore never widens beyond the HTTP one, and a CORS-config
+    change alone still cannot open the stream to non-local origins.
     """
+    import ipaddress
+
+    from app.api.middleware import _allowed_cidrs
     from app.config import get_settings
 
-    return frozenset(
-        origin.rstrip("/")
-        for origin in get_settings().BACKEND_CORS_ORIGINS
-        if urlparse(origin).hostname in _LOCALHOST_HOSTS
-    )
+    allowed: set[str] = set()
+    for origin in get_settings().BACKEND_CORS_ORIGINS:
+        origin = origin.rstrip("/")
+        host = urlparse(origin).hostname
+        if host in _LOCALHOST_HOSTS:
+            allowed.add(origin)
+            continue
+        if not host:
+            continue
+        try:
+            addr = ipaddress.ip_address(host)
+        except ValueError:
+            continue
+        if any(addr in net for net in _allowed_cidrs()):
+            allowed.add(origin)
+    return frozenset(allowed)
 
 
 def validate_websocket_origin(websocket: WebSocket) -> bool:

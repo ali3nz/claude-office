@@ -18,10 +18,23 @@ const WALL_HEIGHT = 250;
 const WALL_TRIM_HEIGHT = 10;
 const FLOOR_TILE_SIZE = 100;
 
-// Colors
+// Colors (Orchestra Office theme — W17ant-inspired warm palette)
 const FLOOR_COLOR = ORCHESTRA_PALETTE.floor;
 const WALL_COLOR = ORCHESTRA_PALETTE.wall;
 const WALL_TRIM_COLOR = ORCHESTRA_PALETTE.wallTrim;
+const FLOOR_TILE_DARK = ORCHESTRA_PALETTE.floorTileDark;
+const DESK_WOOD = ORCHESTRA_PALETTE.deskWood;
+const DESK_WOOD_LIGHT = ORCHESTRA_PALETTE.deskWoodLight;
+const GLOW_WARM = ORCHESTRA_PALETTE.glowWarm;
+const GLOW_WARM_ALPHA = ORCHESTRA_PALETTE.glowWarmAlpha;
+const GLOW_MONITOR = ORCHESTRA_PALETTE.glowMonitor;
+const GLOW_MONITOR_ALPHA = ORCHESTRA_PALETTE.glowMonitorAlpha;
+
+// Desk band depth along the wall (W17ant-style furniture strip)
+const DESK_BAND_HEIGHT = 22;
+// Spacing of monitor glow patches across the desk band
+const MONITOR_GLOW_SPACING = 320;
+const MONITOR_GLOW_WIDTH = 84;
 
 // ============================================================================
 // TYPES
@@ -38,9 +51,9 @@ interface TileData {
   tint: number;
 }
 
-// Tint colors for checkerboard effect
+// Tint colors for checkerboard effect (warm darkening, not gray)
 const TILE_TINT_LIGHT = 0xffffff; // No tint
-const TILE_TINT_DARK = 0xd8d8d8; // Slightly darker
+const TILE_TINT_DARK = FLOOR_TILE_DARK;
 
 // ============================================================================
 // DRAWING FUNCTION
@@ -63,6 +76,26 @@ function drawWalls(g: Graphics): void {
   // Wall base trim
   g.rect(0, WALL_HEIGHT - WALL_TRIM_HEIGHT, CANVAS_WIDTH, WALL_TRIM_HEIGHT);
   g.fill(WALL_TRIM_COLOR);
+
+  // Desk band along the wall (W17ant desk-wood strip with top highlight)
+  g.rect(0, WALL_HEIGHT, CANVAS_WIDTH, DESK_BAND_HEIGHT);
+  g.fill(DESK_WOOD);
+  g.rect(0, WALL_HEIGHT, CANVAS_WIDTH, 4);
+  g.fill(DESK_WOOD_LIGHT);
+
+  // Warm lamp glow pooling over the desk band
+  g.rect(0, WALL_HEIGHT - 28, CANVAS_WIDTH, DESK_BAND_HEIGHT + 46);
+  g.fill({ color: GLOW_WARM, alpha: GLOW_WARM_ALPHA });
+
+  // Cool monitor glow patches along the desk band
+  for (
+    let x = MONITOR_GLOW_SPACING / 2;
+    x < CANVAS_WIDTH;
+    x += MONITOR_GLOW_SPACING
+  ) {
+    g.rect(x - MONITOR_GLOW_WIDTH / 2, WALL_HEIGHT + 2, MONITOR_GLOW_WIDTH, 10);
+    g.fill({ color: GLOW_MONITOR, alpha: GLOW_MONITOR_ALPHA });
+  }
 }
 
 // ============================================================================

@@ -1,6 +1,8 @@
 """Tests for security hardening (issue #37 + #41)."""
 
+import os
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import patch
 from urllib.parse import urlparse
@@ -210,6 +212,45 @@ class TestWebSocketOriginValidation:
     def test_localhost_origin_accepted(self) -> None:
         ws = self._make_ws(origin="http://localhost:3000")
         assert validate_websocket_origin(ws) is True
+    @staticmethod
+    def _patch_settings(origins: list[str]):
+        """Stub get_settings (lru_cached) with a CORS origin list."""
+        return patch(
+            "app.config.get_settings",
+            return_value=SimpleNamespace(BACKEND_CORS_ORIGINS=origins),
+        )
+
+    def test_lan_ip_origin_in_allow_cidr_accepted(self) -> None:
+        """Duo LAN display deployment (issue 207 r2): a non-loopback origin
+        listed in BACKEND_CORS_ORIGINS whose host is an IP inside
+        CLAUDE_OFFICE_ALLOW_CIDR is admitted, so the browser WS trust
+        boundary never widens beyond the HTTP one.
+        """
+        ws = self._make_ws(origin="http://192.168.1.240:8001")
+        with patch.dict(
+            os.environ, {"CLAUDE_OFFICE_ALLOW_CIDR": "192.168.1.0/24"}
+        ), self._patch_settings(
+            ["http://192.168.1.240:8001"]
+        ):
+            assert validate_websocket_origin(ws) is True
+
+    def test_lan_ip_origin_outside_allow_cidr_rejected(self) -> None:
+        ws = self._make_ws(origin="http://10.9.9.9:8001")
+        with patch.dict(
+            os.environ, {"CLAUDE_OFFICE_ALLOW_CIDR": "192.168.1.0/24"}
+        ), self._patch_settings(
+            ["http://10.9.9.9:8001"]
+        ):
+            assert validate_websocket_origin(ws) is False
+
+    def test_lan_ip_origin_without_cidr_config_rejected(self) -> None:
+        """No CIDR configured -> non-loopback origins stay rejected."""
+        ws = self._make_ws(origin="http://192.168.1.240:8001")
+        with patch.dict(os.environ, {"CLAUDE_OFFICE_ALLOW_CIDR": ""}
+                        ), self._patch_settings(
+            ["http://192.168.1.240:8001"]
+        ):
+            assert validate_websocket_origin(ws) is False
 
     def test_cors_origin_non_loopback_rejected(self) -> None:
         """A non-loopback origin present in BACKEND_CORS_ORIGINS must still be
