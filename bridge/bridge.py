@@ -244,6 +244,9 @@ def post_envelope(envelope):
         return False
 
 
+START_AT_END = os.environ.get("CO_START_AT_END", "0") == "1"
+
+
 def load_state():
     try:
         with open(STATE_FILE, encoding="utf-8") as fh:
@@ -255,7 +258,16 @@ def load_state():
             return state
     except (OSError, ValueError):
         pass
-    return {"cursors": {}, "sent": [], "live": {}}
+    state = {"cursors": {}, "sent": [], "live": {}}
+    if START_AT_END:
+        for path in (FEED_KIT, FEED_OC, FEED_FB):
+            try:
+                with open(path, encoding="utf-8") as fh:
+                    state["cursors"][path] = sum(1 for _ in fh)
+            except OSError:
+                pass
+        log("starting at live edge; historical lines skipped")
+    return state
 
 
 def save_state(state):

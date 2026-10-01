@@ -15,6 +15,37 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+  co-bridge:
+    image: python:3.13-slim
+    container_name: co-bridge
+    command: ["python", "/bridge/bridge.py"]
+    environment:
+      - CO_BACKEND=http://claude-office:8000/api/v1/events
+      - CO_API_KEY=${CLAUDE_OFFICE_INGEST_KEY}
+      - CO_STATE_DIR=/state
+      - CO_FEED_KIT=/feeds/kitdir/observer-events.jsonl
+      - CO_FEED_OC=/feeds/ocdir/events.jsonl
+      - CO_FEED_FB=/feeds/fbdir/events.jsonl
+      - CO_START_AT_END=1
+      - CO_POLL_SEC=5
+    volumes:
+      - ./bridge/bridge.py:/bridge/bridge.py:ro
+      - /home/ali3nz/docker/freebuff/workspace/work/ai-orchestration/runs:/feeds/kitdir:ro
+      - /home/ali3nz/docker/openchamber/data/pixel-office:/feeds/ocdir:ro
+      - /home/ali3nz/docker/freebuff/workspace/.freebuff/pixel-office:/feeds/fbdir:ro
+      - co-bridge-state:/state
+    networks:
+      - default
+    restart: unless-stopped
+    mem_limit: 256m
+    cpus: 0.5
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 volumes:
   co-office-db:
     name: co-office-db
+  co-bridge-state:
+    name: co-bridge-state
