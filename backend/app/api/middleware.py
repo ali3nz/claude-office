@@ -118,6 +118,16 @@ class ApiKeyMiddleware(BaseHTTPMiddleware):
         ):
             return await call_next(request)
 
+        # Duo deployment: the statically served frontend (SPA catch-all
+        # plus /_next assets) stays public so keyless browsers can load
+        # the page and present ?token= (read into sessionStorage by the
+        # frontend, attached as X-API-Key on API calls). Every route
+        # under the API namespace keeps the auth logic below.
+        api_prefix = settings.API_V1_STR.rstrip("/")
+        if not (request.url.path == api_prefix
+                or request.url.path.startswith(api_prefix + "/")):
+            return await call_next(request)
+
         # Determine whether auth is required for this request
         requires_auth = settings.has_explicit_key or _is_state_changing(
             request.url.path, request.method
