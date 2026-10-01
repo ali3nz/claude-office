@@ -1,3 +1,5 @@
+import asyncio
+import contextlib
 import logging
 import time
 from collections import deque
@@ -31,6 +33,42 @@ _MAX_TRACKED_SESSIONS = 4096
 # Event.session_id is a required Pydantic field, so this is defensive only;
 # such requests share a single global bucket rather than a per-session one.
 _FALLBACK_KEY = "__global__"
+
+
+# Duo deployment: per-session processing chain (arrival-ordered).
+# Background tasks start in response-completion order, which can differ
+# from POST arrival order under burst. Linking each event processing
+# coroutine to its session predecessor tail happens synchronously in
+# the route handler (no await between link steps), so chain order =
+# handler execution order. Each link awaits its predecessor (errors
+# swallowed: events are independent records) then processes. Combined
+# with the timestamp-supremum guards in _persist_event, same-session
+# application converges deterministically under any arrival pattern.
+_chain_tails: dict[str, asyncio.Task] = {}
+
+
+def _chain_process(ep, event):
+    prev = _chain_tails.get(event.session_id)
+
+    async def _run():
+        if prev is not None:
+            with contextlib.suppress(Exception):
+                await prev
+        await ep.process_event(event)
+
+    task = asyncio.ensure_future(_run())
+    _chain_tails[event.session_id] = task
+    return task
+
+
+async def _run_chained(task):
+    try:
+        await task
+    finally:
+        for sid, tail in list(_chain_tails.items()):
+            if tail is task:
+                del _chain_tails[sid]
+                break
 
 # session_id -> deque of monotonic timestamps within the current window.
 _request_times: dict[str, deque[float]] = {}
@@ -127,7 +165,7 @@ async def receive_event(
         A status payload with event_id and processing state.
     """
     _check_rate_limit(event.session_id)
-    background_tasks.add_task(ep.process_event, event)
+    background_tasks.add_task(_run_chained, _chain_process(ep, event))
     return {
         "status": "accepted",
         "event_id": str(event.timestamp),

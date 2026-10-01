@@ -408,8 +408,7 @@ class EventProcessor:
         )
 
         try:
-            async with _lock_for_session(event.session_id):
-                await self._process_event_internal(event)
+            await self._process_event_internal(event)
         except Exception as e:
             logger.exception(f"Error processing event {event.event_type}: {e}")
             with contextlib.suppress(Exception):
@@ -486,6 +485,16 @@ class EventProcessor:
     # ------------------------------------------------------------------
 
     async def _process_event_internal(self, event: AnyEvent) -> None:
+        # Duo deployment: serialize whole-pipeline processing per session.
+        # Ingest, transcript pollers, and synthetic emitters all funnel
+        # through here, so this single lock covers every writer that the
+        # route-level chain and the public process_event wrapper miss.
+        # asyncio.Lock is not reentrant: inner code must never call this
+        # wrapper (it calls _process_event_inner directly).
+        async with _lock_for_session(event.session_id):
+            await self._process_event_inner(event)
+
+    async def _process_event_inner(self, event: AnyEvent) -> None:
         """Persist event, update state machine, build history, and delegate to handlers.
 
         This is the core processing pipeline:
@@ -970,8 +979,21 @@ class EventProcessor:
             )
             session_rec = result.scalar_one()
 
+            # Duo deployment: order-sensitive writes are guarded by the
+            # event-time watermark so concurrent application converges
+            # deterministically. SQLite returns naive datetimes; normalize.
+            event_ts = event.timestamp
+            if event_ts.tzinfo is None:
+                event_ts = event_ts.replace(tzinfo=UTC)
+            last_ts = session_rec.last_event_ts
+            if last_ts is not None and last_ts.tzinfo is None:
+                last_ts = last_ts.replace(tzinfo=UTC)
+            is_fresh = last_ts is None or event_ts >= last_ts
+
             # Persist floor/room assignment in the same session/transaction.
-            if floor_id and room_id:
+            # Guarded: a late-arriving older event must not drag a
+            # session back to a previous room.
+            if floor_id and room_id and is_fresh:
                 session_rec.floor_id = floor_id
                 session_rec.room_id = room_id
 
@@ -995,9 +1017,12 @@ class EventProcessor:
             if team_name and session_rec.is_lead is False and not session_rec.teammate_name:
                 session_rec.is_lead = True
 
-            if is_session_start:
+            if is_session_start and is_fresh:
                 await db.execute(
-                    delete(EventRecord).where(EventRecord.session_id == event.session_id)
+                    delete(EventRecord).where(
+                        (EventRecord.session_id == event.session_id)
+                        & (EventRecord.timestamp <= event_ts)
+                    )
                 )
                 session_rec.status = "active"
                 session_rec.updated_at = datetime.now(UTC)
@@ -1017,10 +1042,19 @@ class EventProcessor:
                     session_rec.is_lead = False
                 elif team_name:
                     session_rec.is_lead = True
-            elif is_session_end:
+            elif is_session_end and is_fresh:
                 session_rec.status = "completed"
                 session_rec.updated_at = datetime.now(UTC)
 
+            if is_fresh:
+                if session_rec.last_event_ts is None:
+                    session_rec.last_event_ts = event_ts
+                else:
+                    known = session_rec.last_event_ts
+                    if known.tzinfo is None:
+                        known = known.replace(tzinfo=UTC)
+                    if event_ts > known:
+                        session_rec.last_event_ts = event_ts
             event_rec = EventRecord(
                 session_id=event.session_id,
                 timestamp=event.timestamp,

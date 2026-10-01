@@ -33,6 +33,13 @@ class SessionRecord(Base):
     team_name: Mapped[str | None] = mapped_column(String, nullable=True)
     teammate_name: Mapped[str | None] = mapped_column(String, nullable=True)
     is_lead: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    # Duo deployment: supremum of applied event timestamps. Status and
+    # other order-sensitive writes apply only for events at or past this
+    # watermark, so concurrent background application of same-session
+    # events converges deterministically regardless of commit order.
+    last_event_ts: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, default=None
+    )
 
     events: Mapped[list[EventRecord]] = relationship(
         "EventRecord", back_populates="session", cascade="all, delete-orphan"
