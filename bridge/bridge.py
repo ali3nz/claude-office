@@ -18,6 +18,7 @@ import urllib.request
 from datetime import UTC, datetime
 
 BACKEND_URL = os.environ.get("CO_BACKEND", "http://claude-office:8000/api/v1/events")
+API_KEY = os.environ.get("CO_API_KEY", "")
 STATE_DIR = os.environ.get("CO_STATE_DIR", "/state")
 POLL_SEC = float(os.environ.get("CO_POLL_SEC", "5"))
 HTTP_TIMEOUT = float(os.environ.get("CO_HTTP_TIMEOUT", "10"))
@@ -229,8 +230,11 @@ def translate_vocab(line, source, prefix, live_agents):
 
 def post_envelope(envelope):
     payload = json.dumps(envelope).encode("utf-8")
+    headers = {"Content-Type": "application/json"}
+    if API_KEY:
+        headers["X-API-Key"] = API_KEY
     req = urllib.request.Request(BACKEND_URL, data=payload,
-                                 headers={"Content-Type": "application/json"},
+                                 headers=headers,
                                  method="POST")
     try:
         with urllib.request.urlopen(req, timeout=HTTP_TIMEOUT) as resp:
