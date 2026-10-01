@@ -1,0 +1,2 @@
+{"session_id":"oc-ses-001","platform":"openchamber","ts":1790836100.0,"event":"tool_start","tool_name":"read","activity":"reading","label":"OC session","preview":"SECRET-FILE-CONTENT"}
+{"session_id":"oc-ses-001","platform":"openchamber","ts":1790836101.0,"event":"tool_end","tool_name":"read","activity":"idle","label":"OC session"}
