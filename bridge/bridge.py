@@ -258,6 +258,10 @@ def load_state():
             return state
     except (OSError, ValueError):
         pass
+    return fresh_state()
+
+
+def fresh_state():
     state = {"cursors": {}, "sent": [], "live": {}}
     if START_AT_END:
         for path in (FEED_KIT, FEED_OC, FEED_FB):
