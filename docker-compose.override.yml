@@ -1,7 +1,7 @@
 services:
   claude-office:
     ports: !override
-      - "127.0.0.1:8001:8000"
+      - "192.168.1.240:8001:8000"
     volumes: !override
       - co-office-db:/app/data
       - ./data/claude-ro:/claude-data:ro
