@@ -778,7 +778,8 @@ export function OfficeGame(): ReactNode {
                     {/* Ambient Office cast when no real agents exist (render-only) */}
                     <AmbientStaff />
                   </pixiContainer>
-                  </CoErrorBoundary>                  {/* Desk surfaces and keyboards (legacy theme; DM art has its own) */}
+                  </CoErrorBoundary>
+                  {/* Desk surfaces and keyboards (legacy theme; DM art has its own) */}
                   {!W17ANT_CAST_MODE && (
                     <DeskSurfacesBase
                       deskCount={deskCount}
