@@ -19,7 +19,7 @@ import {
   Sprite,
   Application as PixiApplication,
 } from "pixi.js";
-import { useMemo, useEffect, useRef, useCallback, type ReactNode } from "react";
+import { useMemo, useEffect, useRef, useCallback, useState, type ReactNode } from "react";
 import {
   TransformWrapper,
   TransformComponent,
@@ -97,6 +97,12 @@ import { ZoomControls } from "./ZoomControls";
 import { LoadingScreen } from "./LoadingScreen";
 import { OfficeBackground } from "./OfficeBackground";
 import { AmbientStaff } from "./AmbientStaff";
+import {
+  RenderStatus,
+  normalizeRendererType,
+  type RenderInitState,
+  type RendererKind,
+} from "./RenderStatus";
 import { W17ANT_CAST_MODE } from "@/themes/w17ant-cast";
 
 // Register PixiJS components
@@ -193,7 +199,33 @@ export function OfficeGame(): ReactNode {
   const hmrVersion = getHmrVersion();
 
   // Load all office textures
-  const { textures, loaded: spritesLoaded } = useOfficeTextures();
+  const {
+    textures,
+    loaded: spritesLoaded,
+    texturesLoaded,
+    texturesFailed,
+    timeoutFired,
+  } = useOfficeTextures();
+
+  // Render-status diagnostic state (issue 212, Sol-approved architecture):
+  // owned by the DOM parent, outside the Pixi tree. init.rejected is set
+  // ONLY on an actually observed init-path error -- the installed
+  // @pixi/react API exposes onInit on success only, so absence of onInit
+  // (stall) must never masquerade as rejection.
+  const [renderInit, setRenderInit] = useState<RenderInitState>(() => ({
+    entered: true,
+    enteredAt: Date.now(),
+    resolved: false,
+    rejected: false,
+    errorStep: null,
+    errorMessage: null,
+  }));
+  const [rendererType, setRendererType] = useState<RendererKind>(null);
+  const buildCommit =
+    process.env.NEXT_PUBLIC_CO_COMMIT &&
+    process.env.NEXT_PUBLIC_CO_COMMIT !== ""
+      ? process.env.NEXT_PUBLIC_CO_COMMIT
+      : "unknown";
 
   // Start animation system
   useAnimationSystem();
@@ -343,7 +375,18 @@ export function OfficeGame(): ReactNode {
           wrapperClass="w-full h-full"
           contentClass="w-full h-full"
         >
-          <div className="pixi-canvas-container w-full h-full">
+          <div className="pixi-canvas-container w-full h-full relative">
+            <RenderStatus
+              init={renderInit}
+              rendererType={rendererType}
+              assets={{
+                spritesLoaded,
+                texturesLoaded,
+                texturesFailed,
+                timeoutFired,
+              }}
+              buildCommit={buildCommit}
+            />
             <Application
               key={`pixi-app-${hmrVersion}`}
               width={CANVAS_WIDTH}
@@ -355,6 +398,16 @@ export function OfficeGame(): ReactNode {
               }
               onInit={(app) => {
                 appRef.current = app;
+                setRendererType(
+                  normalizeRendererType(
+                    (app as unknown as { renderer?: unknown }).renderer ??
+                      app,
+                  ),
+                );
+                setRenderInit((st) => ({
+                  ...st,
+                  resolved: true,
+                }));
               }}
             >
               {/* Loading screen - shown while sprites are loading */}

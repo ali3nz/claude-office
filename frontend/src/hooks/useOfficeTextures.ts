@@ -54,6 +54,11 @@ const TEXTURE_READY_TIMEOUT_MS = 15000;
 interface UseOfficeTexturesResult {
   textures: OfficeTextures;
   loaded: boolean;
+  /** Counters for the render-status diagnostic (issue 212). */
+  texturesLoaded: number;
+  texturesFailed: number;
+  /** True only when the bounded readiness timeout fired (never a rejection). */
+  timeoutFired: boolean;
 }
 
 const TEXTURE_PATHS: Record<keyof OfficeTextures, string> = {
@@ -119,6 +124,9 @@ const EMPTY_TEXTURES: OfficeTextures = {
 export function useOfficeTextures(): UseOfficeTexturesResult {
   const [textures, setTextures] = useState<OfficeTextures>(EMPTY_TEXTURES);
   const [loaded, setLoaded] = useState(false);
+  const [texturesLoaded, setTexturesLoaded] = useState(0);
+  const [texturesFailed, setTexturesFailed] = useState(0);
+  const [timeoutFired, setTimeoutFired] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -134,13 +142,20 @@ export function useOfficeTextures(): UseOfficeTexturesResult {
       );
 
     const loads = paths.map((path) =>
-      Assets.load(path).catch((error) => {
-        console.warn(
-          `[office-textures] asset failed, using fallback: ${path}`,
-          error,
-        );
-        return null;
-      }),
+      Assets.load<Texture>(path).then(
+        (t) => {
+          if (!cancelled) setTexturesLoaded((n) => n + 1);
+          return t;
+        },
+        (error) => {
+          console.warn(
+            `[office-textures] asset failed, using fallback: ${path}`,
+            error,
+          );
+          if (!cancelled) setTexturesFailed((n) => n + 1);
+          return null;
+        },
+      ),
     );
     const allSettled = Promise.all(loads);
 
@@ -152,6 +167,7 @@ export function useOfficeTextures(): UseOfficeTexturesResult {
       console.warn(
         `[office-textures] readiness timeout after ${TEXTURE_READY_TIMEOUT_MS}ms; rendering with fallbacks`,
       );
+      setTimeoutFired(true);
       setLoaded(true);
     }, TEXTURE_READY_TIMEOUT_MS);
 
@@ -167,5 +183,5 @@ export function useOfficeTextures(): UseOfficeTexturesResult {
     };
   }, []);
 
-  return { textures, loaded };
+  return { textures, loaded, texturesLoaded, texturesFailed, timeoutFired };
 }
