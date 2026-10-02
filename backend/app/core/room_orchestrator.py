@@ -256,7 +256,7 @@ class RoomOrchestrator:
 
         desk_count = max(8, len(merged_agents) + 2)
         return GameState(
-            session_id=first_entry.session_id,
+            session_id=OFFICE_ROOM_ID,
             floor_id=first_entry.sm.floor_id,
             room_id=OFFICE_ROOM_ID,
             boss=first_state.boss,

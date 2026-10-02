@@ -48,8 +48,12 @@ export function useWebSocketEvents({
 }: UseWebSocketEventsOptions): void {
   // ---- Domain-tracking refs (read/written by reconcileState) ----
   const processedAgentsRef = useRef<Set<string>>(new Set());
-  const currentSessionIdRef = useRef(sessionId);
-  currentSessionIdRef.current = sessionId;
+  // Issue 221: the office subscribes to the merged ROOM feed, whose state
+  // carries the room id. Guards (stale-session filter + reconcile) must match
+  // that identity, not the sidebar's selected session.
+  const guardId = roomId ?? sessionId;
+  const currentSessionIdRef = useRef(guardId);
+  currentSessionIdRef.current = guardId;
   // Prevents backend queue state from overwriting the frontend's animated queue
   // after the initial mid-session-join sync.
   const initialQueueSyncDoneRef = useRef<string | null>(null);
@@ -211,7 +215,7 @@ export function useWebSocketEvents({
         ? `ws://${window.location.hostname}:8000`
         : "ws://localhost:8000");
     controllerRef.current = new WebSocketController({
-      sessionId,
+      sessionId: guardId,
       enabled,
       roomId,
       baseUrl,
@@ -225,7 +229,8 @@ export function useWebSocketEvents({
   }
   // Keep mutable opts fresh so the controller always closes over current state
   // without re-creating the instance (and churning the socket).
-  controllerRef.current.opts.sessionId = sessionId;
+  controllerRef.current.opts.sessionId = guardId;
+  controllerRef.current.opts.roomId = roomId;
   controllerRef.current.opts.enabled = enabled;
   controllerRef.current.opts.onMessage = handleMessage;
   controllerRef.current.opts.onReconnectReset = handleReconnectReset;
@@ -233,7 +238,7 @@ export function useWebSocketEvents({
   // ---- Connection lifecycle ----
   useEffect(() => {
     const isReplaying = useGameStore.getState().isReplaying;
-    if (!enabled || !sessionId || isReplaying) {
+    if (!enabled || !(roomId ?? sessionId) || isReplaying) {
       controllerRef.current?.disconnect();
       return;
     }
@@ -244,7 +249,7 @@ export function useWebSocketEvents({
       controllerRef.current?.disconnect();
       typingTrackerRef.current?.clear();
     };
-  }, [sessionId, enabled]);
+  }, [sessionId, roomId, enabled]);
 }
 
 // ============================================================================
