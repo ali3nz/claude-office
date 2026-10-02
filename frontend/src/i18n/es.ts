@@ -76,6 +76,9 @@ const es: Record<TranslationKey, string> = {
   "settings.clockTip":
     "Consejo: Haz clic en el reloj de la oficina para alternar rápidamente entre modos.",
   "settings.language": "Idioma",
+  "settings.officeRoom": "Ubicaci\u00f3n de la oficina",
+  "settings.officeRoom.modern": "Oficina moderna",
+  "settings.officeRoom.dm": "Dunder Mifflin",
   "settings.tabs.general": "General",
   "settings.tabs.building": "Edificio",
   "settings.building.name": "Nombre del Edificio",

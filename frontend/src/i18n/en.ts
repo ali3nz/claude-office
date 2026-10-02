@@ -74,6 +74,9 @@ const en = {
   "settings.clockTip":
     "Tip: Click the clock in the office to quickly cycle between modes.",
   "settings.language": "Language",
+  "settings.officeRoom": "Office location",
+  "settings.officeRoom.modern": "Modern office",
+  "settings.officeRoom.dm": "Dunder Mifflin",
   "settings.tabs.general": "General",
   "settings.tabs.building": "Building",
   "settings.building.name": "Building Name",

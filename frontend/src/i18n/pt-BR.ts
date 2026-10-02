@@ -76,6 +76,9 @@ const ptBR: Record<TranslationKey, string> = {
   "settings.clockTip":
     "Dica: Clique no relógio do escritório para alternar rapidamente entre os modos.",
   "settings.language": "Idioma",
+  "settings.officeRoom": "Localiza\u00e7\u00e3o do escrit\u00f3rio",
+  "settings.officeRoom.modern": "Escrit\u00f3rio moderno",
+  "settings.officeRoom.dm": "Dunder Mifflin",
   "settings.tabs.general": "Geral",
   "settings.tabs.building": "Edifício",
   "settings.building.name": "Nome do Edifício",

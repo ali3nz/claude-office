@@ -92,11 +92,18 @@ body {
 
   /* PixiJS Canvas Scaling — anchored to top-left to prevent drift from
      flex centering recalculations during frequent WebSocket re-renders */
+  .pixi-canvas-container {
+    /* Issue 226 R5: the letterbox around the fixed-aspect canvas blends with
+       the room art's own dark surround instead of reading as a black gap. */
+    background: #0a0c12;
+  }
+
   .pixi-canvas-container canvas {
     width: 100% !important;
     height: 100% !important;
     object-fit: contain;
-    object-position: top left;
+    /* Centered so the letterbox is balanced (operator: "black on the right"). */
+    object-position: top center;
   }
 
   /* Custom Scrollbar Theme */

@@ -145,11 +145,25 @@ export function officeSpritePath(
 export const BOSS_SLUG = "michael-scott";
 export const BOSS_SPRITE_PATH = officeSpritePath(BOSS_SLUG, "front-right");
 
-/** Room art for the time of day (DM variant = the real Dunder Mifflin floor). */
-export function getRoomImage(date: Date = new Date()): string {
+/**
+ * Office location (issue 226 R5, operator): both rooms share the same geometry
+ * (1200x896, identical furniture/seat percentages), so switching is a pure
+ * background swap. "modern" = glass-wall office by the city; "dm" = the
+ * Dunder Mifflin Scranton floor.
+ */
+export type OfficeRoom = "modern" | "dm";
+
+/** Room art for the location + time of day (auto day/night by wall clock). */
+export function getRoomImage(
+  date: Date = new Date(),
+  room: OfficeRoom = "modern",
+): string {
   const hour = date.getHours();
   const night = hour < 7 || hour >= 19;
-  return night ? "/rooms/office-night-dm.png" : "/rooms/office-day-dm.png";
+  const suffix = room === "dm" ? "-dm" : "";
+  return night
+    ? `/rooms/office-night${suffix}.png`
+    : `/rooms/office-day${suffix}.png`;
 }
 
 // ===== Themed chatter (ported pools from W17ant src/theme.ts) =====

@@ -7,6 +7,7 @@ import {
   type ClockType,
   type ClockFormat,
 } from "@/stores/preferencesStore";
+import { useOfficeRoomStore } from "@/stores/officeRoomStore";
 import { useTranslation } from "@/hooks/useTranslation";
 import { locales, type Locale } from "@/i18n";
 import { BuildingTab } from "@/components/settings/BuildingTab";
@@ -96,6 +97,8 @@ export default function SettingsModal({
   const setAutoFollowNewSessions = usePreferencesStore(
     (s) => s.setAutoFollowNewSessions,
   );
+  const officeRoom = useOfficeRoomStore((s) => s.room);
+  const setOfficeRoom = useOfficeRoomStore((s) => s.setRoom);
 
   // Attention settings
   const commandBarEnabled = usePreferencesStore((s) => s.commandBarEnabled);
@@ -249,6 +252,40 @@ export default function SettingsModal({
           </div>
 
           {/* Clock Type */}
+          {/* Office location (issue 226 R5): pure background swap; day/night
+              stays automatic from the wall clock. */}
+          <div>
+            <label className="block text-slate-400 text-xs font-bold uppercase tracking-wider mb-3">
+              {t("settings.officeRoom")}
+            </label>
+            <div
+              className="flex gap-3"
+              role="radiogroup"
+              aria-label={t("settings.officeRoom")}
+            >
+              {(["modern", "dm"] as const).map((room) => (
+                <button
+                  key={room}
+                  type="button"
+                  role="radio"
+                  aria-checked={officeRoom === room}
+                  onClick={() => setOfficeRoom(room)}
+                  className={`flex-1 px-4 py-3 rounded-lg border text-sm font-bold transition-colors ${
+                    officeRoom === room
+                      ? "bg-purple-500/20 border-purple-500 text-purple-300"
+                      : "bg-slate-800 border-slate-700 text-slate-400 hover:border-slate-600"
+                  }`}
+                >
+                  {t(
+                    room === "modern"
+                      ? "settings.officeRoom.modern"
+                      : "settings.officeRoom.dm",
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+
           <div>
             <label className="block text-slate-400 text-xs font-bold uppercase tracking-wider mb-3">
               {t("settings.clockType")}

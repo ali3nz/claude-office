@@ -13,6 +13,7 @@ import { CANVAS_WIDTH, CANVAS_HEIGHT } from "@/constants/canvas";
 import { ORCHESTRA_PALETTE } from "@/themes/orchestra-office";
 import { usePixiTexture } from "@/hooks/usePixiTexture";
 import { getRoomImage } from "@/themes/w17ant-cast";
+import { useOfficeRoomStore } from "@/stores/officeRoomStore";
 import { coMark } from "@/utils/coMark";
 
 // ============================================================================
@@ -79,7 +80,10 @@ export function OfficeBackground({
   floorTileTexture,
 }: OfficeBackgroundProps): ReactNode {
   coMark("bg");
-  const roomUrl = useMemo(() => getRoomImage(), []);
+  // Issue 226 R5: location comes from the local room preference; day/night is
+  // automatic from the wall clock inside getRoomImage.
+  const room = useOfficeRoomStore((s) => s.room);
+  const roomUrl = useMemo(() => getRoomImage(new Date(), room), [room]);
   const roomTexture = usePixiTexture(roomUrl);
 
   // Generate tile positions with alternating rotations and tints (fallback)
