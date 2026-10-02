@@ -7,7 +7,7 @@
 
 import { Position } from "@/types";
 import { ELEVATOR_ZONE } from "./queuePositions";
-import { DESKS, DESK_SPOTS, BOSS_SPOT } from "@/themes/w17ant-spots";
+import { DESK_SPOTS, BOSS_SPOT } from "@/themes/w17ant-spots";
 
 // Grid configuration
 export const TILE_SIZE = 32;
@@ -43,7 +43,7 @@ const WALL_Y_END = 232 + OBSTACLE_PADDING; // Wall visual end + padding (one ext
 // desk spots. Agents seated with rear-* facings sit IN FRONT of their desk
 // (W17ant zIndex >= 70), so the desk surface sits above their feet; front-*
 // agents sit BEHIND their desk, so the surface sits below their feet.
-const DESK_HALF_WIDTH = 30 + OBSTACLE_PADDING; // narrow: seated strip stays clear (issue 226 R2)
+const DESK_HALF_WIDTH = 70 + OBSTACLE_PADDING; // Desk visual half-width + padding
 
 // Elevator bounds derived from ELEVATOR_ZONE (single source of truth)
 const ELEVATOR_X = (ELEVATOR_ZONE.minX + ELEVATOR_ZONE.maxX) / 2; // 76
@@ -141,31 +141,17 @@ export class NavigationGrid {
     // markRectangle end bounds are ceil-exclusive, so clamp them to rows
     // strictly above/below the seat row: the seat tile itself must stay
     // walkable or arriving agents strand (issue 212 seat test).
-    // Issue 226 R2: obstacles come from the RENDERED workstations. Only the
-    // desk's upper body is impassable; the bottom strip (where the seated
-    // character stands, just above the front edge) stays walkable so arriving
-    // agents can reach their seat tile.
-    for (const desk of DESKS) {
-      const frontY = desk.position.y; // bottom-center anchor = front edge
-      this.markRectangle(
-        desk.position.x - DESK_HALF_WIDTH,
-        frontY - 182,
-        desk.position.x + DESK_HALF_WIDTH,
-        frontY - 90,
-        TileType.DESK,
-      );
-    }
-
-    // Issue 226 R2: the seated strip must stay reachable even where desk
-    // clusters overlap. Carve a narrow corridor from each seat down to the
-    // open aisle in front of the desks (the character stands there).
     for (const spot of DESK_SPOTS) {
+      const seatRow = Math.floor(spot.position.y / TILE_SIZE);
+      const inFront = spot.z >= 70; // rear-* agents: desk behind them (above)
+      const y1 = inFront ? spot.position.y - 72 : (seatRow + 1) * TILE_SIZE;
+      const y2 = inFront ? seatRow * TILE_SIZE - 1 : spot.position.y + 68;
       this.markRectangle(
-        spot.position.x - 16,
-        spot.position.y - 16,
-        spot.position.x + 16,
-        spot.position.y + 44,
-        TileType.FLOOR,
+        spot.position.x - DESK_HALF_WIDTH,
+        y1,
+        spot.position.x + DESK_HALF_WIDTH,
+        y2,
+        TileType.DESK,
       );
     }
 
