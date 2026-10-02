@@ -178,7 +178,7 @@ export const DESKS: DeskFurniture[] = (
  * the rug); the others get dedicated desks outside the 10-workstation pool so
  * they can never collide with a session character.
  */
-export const BOSS_SEAT: Position = { x: 640, y: 930 };
+export const BOSS_SEAT: Position = { x: 640, y: 958 };
 
 export const PINNED_SEATS: Record<string, Position> = {
   "Sol Docker": BOSS_SEAT,
