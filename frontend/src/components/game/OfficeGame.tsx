@@ -778,13 +778,7 @@ export function OfficeGame(): ReactNode {
 
                     {/* Agents outside elevator - zIndex based on feet Y position */}
                     {Array.from(agents.values())
-                      .filter(
-                        (agent) =>
-                          !isAgentInElevator(
-                            agent.currentPosition.x,
-                            agent.currentPosition.y,
-                          ) && isVisibleAgent(agent),
-                      )
+                      .filter((agent) => isVisibleAgent(agent))
                       .map((agent) => (
                         <BehaviorGroup
                           key={agent.id}
@@ -922,12 +916,7 @@ export function OfficeGame(): ReactNode {
 
                   {/* Labels Layer - rendered on top of most things */}
                   {Array.from(agents.values())
-                    .filter(
-                      (agent) =>
-                        agent.name &&
-                        !isInElevatorZone(agent.currentPosition) &&
-                        isVisibleAgent(agent),
-                    )
+                    .filter((agent) => agent.name && isVisibleAgent(agent))
                     .map((agent) => (
                       <BehaviorGroup
                         key={`label-${agent.id}`}
