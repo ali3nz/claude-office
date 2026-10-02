@@ -212,7 +212,9 @@ export function useWebSocketEvents({
     const baseUrl =
       process.env.NEXT_PUBLIC_WS_URL ||
       (typeof window !== "undefined"
-        ? `ws://${window.location.hostname}:8000`
+        ? `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${
+            window.location.host
+          }`
         : "ws://localhost:8000");
     controllerRef.current = new WebSocketController({
       sessionId: guardId,

@@ -6,8 +6,9 @@
  * console; initApiKeyFromBrowser captures it into sessionStorage.
  */
 
-export const API_BASE =
-  process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+// Empty => same-origin relative calls (works standalone at :8001 AND when the
+// page is embedded through the homepage embed proxy).
+export const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
 
 const KEY_STORAGE = "claude-office-api-key";
 

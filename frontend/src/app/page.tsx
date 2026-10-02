@@ -276,6 +276,21 @@ export default function V2TestPage(): React.ReactNode {
   };
 
   // ------------------------------------------------------------------
+  // Embed mode (homepage office card, issue 226): ONLY the office canvas,
+  // full-bleed, no header/sidebars/overlays.
+  // ------------------------------------------------------------------
+  const isEmbed =
+    typeof window !== "undefined" &&
+    new URLSearchParams(window.location.search).get("embed") === "1";
+  if (isEmbed) {
+    return (
+      <div className="w-screen h-screen overflow-hidden bg-neutral-950">
+        <OfficeGame />
+      </div>
+    );
+  }
+
+  // ------------------------------------------------------------------
   // Render
   // ------------------------------------------------------------------
   return (
