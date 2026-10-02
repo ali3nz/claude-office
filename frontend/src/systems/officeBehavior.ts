@@ -1,16 +1,18 @@
 /**
  * officeBehavior — display-only movement for real agents (issue 226 R3/R4).
  *
- * Two behaviors, both purely visual (the authoritative agent state, backend and
- * machines are never touched):
+ * Two behaviors, both purely visual (authoritative state, backend and machines
+ * are never touched):
  *   - break:   idle agents occasionally walk to the coffee machine / water
  *              cooler, linger, then return to their exact workstation.
- *   - consult: agents that are consulting Sol walk over to the Sol gateway
- *              character, linger, then return to their workstation.
+ *   - consult: an agent that is consulting Sol walks over to the Sol gateway
+ *              character, lingers, then returns to its workstation.
  *
  * Precedence (Sol): consult movement > return to workstation > idle break >
- * seated idle. The engine is advanced by a single pixi ticker and read by the
- * sprite/label/bubble layers so they stay aligned.
+ * seated idle. Concurrency is capped so the floor never empties: at most ONE
+ * agent on a break and ONE consulting at any moment, with per-agent cooldowns.
+ * Advanced by a single pixi ticker; the sprite/label/bubble layers read the
+ * same offsets so they stay aligned.
  */
 
 import type { Position } from "@/types";
@@ -31,13 +33,18 @@ interface Anim {
   phase: "idle" | "out" | "linger" | "back";
   phaseUntil: number;
   nextBreakAt: number;
+  nextConsultAt: number;
 }
 
 const WALK_SPEED = 95; // px/s
-const BREAK_MIN_MS = 45_000;
-const BREAK_MAX_MS = 150_000;
+const BREAK_MIN_MS = 90_000;
+const BREAK_MAX_MS = 240_000;
 const BREAK_LINGER_MS = 7_000;
-const CONSULT_LINGER_MS = 12_000;
+const CONSULT_LINGER_MS = 10_000;
+const CONSULT_MIN_MS = 180_000;
+const CONSULT_MAX_MS = 420_000;
+const MAX_BREAKS = 1;
+const MAX_CONSULTS = 1;
 
 const specs = new Map<string, BehaviorSpec>();
 const anims = new Map<string, Anim>();
@@ -48,14 +55,15 @@ function randBetween(min: number, max: number): number {
 
 export function setBehavior(id: string, spec: BehaviorSpec): void {
   specs.set(id, spec);
-  const anim = anims.get(id);
-  if (!anim) {
+  if (!anims.has(id)) {
+    const now = Date.now();
     anims.set(id, {
       x: 0,
       y: 0,
       phase: "idle",
       phaseUntil: 0,
-      nextBreakAt: Date.now() + randBetween(BREAK_MIN_MS, BREAK_MAX_MS),
+      nextBreakAt: now + randBetween(BREAK_MIN_MS, BREAK_MAX_MS),
+      nextConsultAt: now + randBetween(CONSULT_MIN_MS, CONSULT_MAX_MS),
     });
   }
 }
@@ -89,34 +97,65 @@ export function tickBehaviors(deltaMs: number): void {
   const now = Date.now();
   const step = (WALK_SPEED * Math.min(deltaMs, 100)) / 1000;
 
+  // Concurrency accounting: how many agents are currently away per behavior.
+  let breaksAway = 0;
+  let consultsAway = 0;
+  for (const [id, spec] of specs) {
+    const a = anims.get(id);
+    if (!a || a.phase === "idle") continue;
+    if (spec.mode === "consult") consultsAway += 1;
+    else if (spec.mode === "break") breaksAway += 1;
+  }
+
   for (const [id, spec] of specs) {
     const anim = anims.get(id);
     if (!anim) continue;
+    const away = anim.phase !== "idle";
 
-    // Consult movement always wins and pre-empts any in-flight break.
+    // ---- consult: highest precedence, capped + cooled down ----
     if (spec.mode === "consult" && spec.target) {
+      if (!away) {
+        if (
+          consultsAway < MAX_CONSULTS &&
+          now >= anim.nextConsultAt
+        ) {
+          consultsAway += 1;
+          anim.phase = "out";
+        } else {
+          // Not this agent's turn: stay seated.
+          continue;
+        }
+      }
       const tx = spec.target.x - spec.seat.x;
       const ty = spec.target.y - spec.seat.y;
       if (anim.phase === "back") {
         if (stepToward(anim, 0, 0, step)) {
           anim.phase = "idle";
+          anim.nextConsultAt = now + randBetween(CONSULT_MIN_MS, CONSULT_MAX_MS);
           anim.nextBreakAt = now + randBetween(BREAK_MIN_MS, BREAK_MAX_MS);
         }
       } else if (anim.phase === "linger") {
         if (now >= anim.phaseUntil) anim.phase = "back";
-      } else {
-        if (stepToward(anim, tx, ty, step)) {
-          anim.phase = "linger";
-          anim.phaseUntil = now + CONSULT_LINGER_MS;
-        }
+      } else if (stepToward(anim, tx, ty, step)) {
+        anim.phase = "linger";
+        anim.phaseUntil = now + CONSULT_LINGER_MS;
       }
       continue;
     }
 
+    // ---- break: only for genuinely idle agents, capped ----
     switch (anim.phase) {
       case "idle": {
-        if (spec.mode === "break" && spec.target && now >= anim.nextBreakAt) {
+        if (
+          spec.mode === "break" &&
+          spec.target &&
+          now >= anim.nextBreakAt &&
+          breaksAway < MAX_BREAKS
+        ) {
+          breaksAway += 1;
           anim.phase = "out";
+        } else if (spec.mode === "break" && now >= anim.nextBreakAt) {
+          anim.nextBreakAt = now + 20_000; // someone else is out; try later
         }
         break;
       }
