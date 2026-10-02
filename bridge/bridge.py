@@ -276,13 +276,19 @@ def translate_vocab(line, source, prefix, live_agents):
     return None, key, sid
 
 
-def translate_gateway(line):
+def translate_gateway(line, seen=None):
     """Narrow agenthome -> gateway-character translation (issue 221 S3).
 
     Only the two whitelisted catgpt gateway sessions are accepted; only the
     lifecycle vocabulary needed for presence (session_start) and working state
     (tool_start/tool_end) is translated; the agent identity/name/type are the
     fixed whitelist values, so no feed free text is propagated.
+
+    ``seen`` is the set of gateway session ids already bootstrapped by this
+    bridge. The presence watcher emits its own session_start only once in the
+    gateway's lifetime, so on the FIRST observed pulse for a gateway the
+    session boundary + character spawn are emitted here; a live pulse is proof
+    that the gateway exists, so this is presence bootstrapping, not invention.
     """
     if not isinstance(line, dict) or "event" not in line:
         return None, None, None
@@ -297,25 +303,27 @@ def translate_gateway(line):
     key = dedup_key("ag", raw_sid, event, line.get("ts"))
     stamp = iso_from_ts(line.get("ts"))
     data = {"agent_id": meta["agent_id"], "project_dir": "/orchestra/gateway"}
-    if event == "session_start":
+    envs = []
+    if event == "session_start" or (seen is not None and raw_sid not in seen):
         data.update({"agent_name": meta["name"], "agent_type": meta["agent_type"],
                      "task_description": "catgpt gateway"})
-        # Two envelopes: the session boundary (so the gateway session is a
-        # first-class listed session) and the character spawn.
-        return [
-            {"session_id": sid, "timestamp": stamp,
-             "event_type": "session_start", "data": data},
-            {"session_id": sid, "timestamp": stamp,
-             "event_type": "subagent_start", "data": data},
-        ], key, sid
+        envs.append({"session_id": sid, "timestamp": stamp,
+                     "event_type": "session_start", "data": data})
+        envs.append({"session_id": sid, "timestamp": stamp,
+                     "event_type": "subagent_start", "data": data})
     if event == "tool_start":
         data.update({"tool_name": "catgpt-gateway"})
-        return {"session_id": sid, "timestamp": stamp,
-                "event_type": "pre_tool_use", "data": data}, key, sid
-    activity = str(line.get("activity") or "")
-    data.update({"tool_name": "catgpt-gateway", "success": activity != "blocked"})
-    return {"session_id": sid, "timestamp": stamp,
-            "event_type": "post_tool_use", "data": data}, key, sid
+        envs.append({"session_id": sid, "timestamp": stamp,
+                     "event_type": "pre_tool_use", "data": data})
+    elif event == "tool_end":
+        activity = str(line.get("activity") or "")
+        data.update({"tool_name": "catgpt-gateway",
+                     "success": activity != "blocked"})
+        envs.append({"session_id": sid, "timestamp": stamp,
+                     "event_type": "post_tool_use", "data": data})
+    if not envs:
+        return None, key, sid
+    return (envs if len(envs) != 1 else envs[0]), key, sid
 
 
 def post_envelope(envelope):
@@ -345,6 +353,7 @@ def load_state():
             state.setdefault("cursors", {})
             state.setdefault("sent", [])
             state.setdefault("live", {})
+            state.setdefault("gateways", {})
             # A feed that was ADDED after the state file existed has no cursor
             # yet: with START_AT_END, start it at the current live edge instead
             # of replaying the whole file (issue 221: adding FEED_AG must not
@@ -366,7 +375,7 @@ def load_state():
 
 
 def fresh_state():
-    state = {"cursors": {}, "sent": [], "live": {}}
+    state = {"cursors": {}, "sent": [], "live": {}, "gateways": {}}
     if START_AT_END:
         for path in (FEED_KIT, FEED_OC, FEED_FB, FEED_AG):
             try:
@@ -422,7 +431,7 @@ def run_once(state):
             if source == "kit":
                 env, key, sid = translate_kit(item, live)
             elif source == "ag":
-                env, key, sid = translate_gateway(item)
+                env, key, sid = translate_gateway(item, set(state.get("gateways", {})))
             else:
                 prefix = "oc-" if source == "oc" else "fb-"
                 env, key, sid = translate_vocab(item, source, prefix, live_agents)
@@ -448,6 +457,10 @@ def run_once(state):
             if len(sent_set) > SENT_CAP:
                 sent_set = set(list(sent_set)[-SENT_CAP:])
             env = envs[-1]
+            if source == "ag":
+                raw_gw = str(item.get("session_id") or "x")
+                if raw_gw in GATEWAY_WHITELIST:
+                    state.setdefault("gateways", {})[raw_gw] = True
             if any(e["event_type"] == "session_start" for e in envs):
                 live[sid] = {"agent": item.get("agentSessionId") or item.get("session_id"),
                              "source": source,
@@ -536,14 +549,18 @@ def selftest():
     gw2 = {"session_id": "agentchat-sol-dockerhost", "platform": "cli",
            "ts": 1790831907.0, "event": "tool_start", "activity": "working",
            "detail": "in use by sol-x", "preview": "SECRET-PREVIEW"}
-    env6, _, _ = translate_gateway(gw2)
-    assert env6["event_type"] == "pre_tool_use", env6
-    assert env6["data"]["agent_id"] == "gateway-dockerhost", env6
+    env6, _, _ = translate_gateway(gw2, set())
+    assert isinstance(env6, list) and len(env6) == 3, env6
+    assert [e["event_type"] for e in env6] == ["session_start", "subagent_start",
+                                               "pre_tool_use"], env6
+    assert env6[2]["data"]["agent_id"] == "gateway-dockerhost", env6
     assert "SECRET" not in json.dumps(env6), env6
+    env6b, _, _ = translate_gateway(gw2, {"agentchat-sol-dockerhost"})
+    assert env6b["event_type"] == "pre_tool_use", env6b
     gw3 = {"session_id": "agentchat-sol-dockerhost", "platform": "cli",
            "ts": 1790831908.0, "event": "tool_end", "activity": "idle",
            "detail": "available"}
-    env7, _, _ = translate_gateway(gw3)
+    env7, _, _ = translate_gateway(gw3, {"agentchat-sol-dockerhost"})
     assert env7["event_type"] == "post_tool_use", env7
     assert env7["data"]["success"] is True, env7
     # unrelated agenthome sessions are rejected outright
