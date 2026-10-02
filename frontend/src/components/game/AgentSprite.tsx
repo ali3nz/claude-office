@@ -335,8 +335,10 @@ function AgentSpriteComponent({
       let jx = 0;
       let jy = 0;
       if (typingRef.current) {
-        jx = Math.sin(t * 47) * 1.2;
-        jy = Math.sin(t * 61 + 1.7) * 0.8;
+        // Issue 226 R5 (operator: "sol docker jitter"): a soft activity sway,
+        // not a vibration. Low frequency, sub-pixel amplitude.
+        jx = Math.sin(t * 8) * 0.35;
+        jy = Math.sin(t * 11 + 1.7) * 0.25;
       }
       node.x = jx;
       node.y = breathe + jy;
