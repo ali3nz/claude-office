@@ -288,7 +288,10 @@ function agentDisplayPosition(agent: {
   desk?: number | null;
   currentPosition: { x: number; y: number };
 }): { x: number; y: number } {
-  if (agent.phase === "idle" && agent.desk) {
+  // Any agent with an assigned desk is ALWAYS drawn at that workstation. This
+  // is deterministic and immune to arrival/animation timing: a fresh load can
+  // never leave an assigned agent invisible at a spawn point.
+  if (agent.desk) {
     return getSpotForDesk(agent.desk).position;
   }
   return agent.currentPosition;
@@ -301,8 +304,8 @@ function isVisibleAgent(agent: {
 }): boolean {
   if (DEPARTING_PHASES.has(agent.phase)) return false;
   const p = agentDisplayPosition(agent);
-  // Visible desk/floor region only: the room floor ends well above the canvas
-  // bottom, so a loose bound left heads poking in from off-floor positions.
+  // Agents with a desk are seated at a known-good workstation by construction.
+  // Only desk-less agents need the region test (hidden if off the floor).
   return p.x >= 280 && p.x <= 1000 && p.y >= 400 && p.y <= 850;
 }
 
