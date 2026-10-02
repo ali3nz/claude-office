@@ -25,13 +25,15 @@ import {
 function DeskSprite({
   desk,
   boss = false,
-  zBias = 0,
+  zBias = -220,
 }: {
   desk: DeskFurniture;
   boss?: boolean;
   /**
-   * Issue 226 R5: lower the desk's sort key so its occupant always renders in
-   * front of it (the Sol corner seats sit outside the W17ant spot z-map).
+   * Issue 226 R5 (operator): desks are FURNITURE - they always sort below the
+   * characters (a desk sprite is ~181px tall, so a -220 bias still lets an
+   * agent standing well behind a desk sort behind it, while the occupant is
+   * never covered by its own desk).
    */
   zBias?: number;
 }): ReactNode {
@@ -52,24 +54,45 @@ function DeskSprite({
   );
 }
 
-/** The 10 workstation desks from the shared W17ant layout. */
-export function DeskCluster(): ReactNode {
+/**
+ * The 10 workstation desks from the shared W17ant layout.
+ *
+ * Issue 226 R5 (operator): only desks that are actually OCCUPIED by a visible
+ * agent are drawn - an empty workstation is not rendered at all.
+ * `occupied` holds the 1-based desk numbers (matching getSpotForDesk).
+ */
+export function DeskCluster({
+  occupied,
+}: {
+  occupied: Set<number>;
+}): ReactNode {
   return (
     <>
-      {DESKS.map((desk, i) => (
-        <DeskSprite key={`desk-${i}`} desk={desk} />
-      ))}
+      {DESKS.map((desk, i) =>
+        occupied.has(i + 1) ? (
+          <DeskSprite key={`desk-${i}`} desk={desk} />
+        ) : null,
+      )}
     </>
   );
 }
 
-/** Persistent-identity workstations (issue 226 R5). */
-export function SolDesks(): ReactNode {
+/** Owner name per PINNED_DESKS entry (Sol Docker uses the boss desk). */
+const PINNED_DESK_OWNERS = [
+  "Sol Webserver",
+  "GhostReporting",
+  "TruFreedom",
+] as const;
+
+/** Persistent-identity workstations (issue 226 R5) - only when present. */
+export function SolDesks({ present }: { present: Set<string> }): ReactNode {
   return (
     <>
-      {PINNED_DESKS.map((desk, i) => (
-        <DeskSprite key={`pinned-desk-${i}`} desk={desk} zBias={-300} />
-      ))}
+      {PINNED_DESKS.map((desk, i) =>
+        present.has(PINNED_DESK_OWNERS[i]) ? (
+          <DeskSprite key={`pinned-desk-${i}`} desk={desk} />
+        ) : null,
+      )}
     </>
   );
 }

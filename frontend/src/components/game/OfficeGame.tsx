@@ -641,6 +641,23 @@ export function OfficeGame(): ReactNode {
     [agents, idleTick],
   );
 
+  // Issue 226 R5 (operator): render only OCCUPIED desks, and only the desks
+  // belonging to pinned identities that are actually on the floor.
+  const occupiedDeskNumbers = useMemo(() => {
+    const s = new Set<number>();
+    for (const a of visibleAgents) {
+      if (a.desk && !(a.name && PINNED_SEATS[a.name])) s.add(a.desk);
+    }
+    return s;
+  }, [visibleAgents]);
+  const presentPinned = useMemo(() => {
+    const s = new Set<string>();
+    for (const a of visibleAgents) {
+      if (a.name && PINNED_SEATS[a.name]) s.add(a.name);
+    }
+    return s;
+  }, [visibleAgents]);
+
   // Issue 226 R3/R4: derive each real agent's display behavior from state it
   // already has (no new authoritative source): consult agents walk to a Sol
   // gateway character; idle agents take coffee/water breaks; everyone else
@@ -868,7 +885,9 @@ export function OfficeGame(): ReactNode {
                   <CoErrorBoundary label="ysort">
                   <pixiContainer sortableChildren={true}>
                     {/* W17ant workstations (desks with computers), z-sorted with agents */}
-                    {W17ANT_CAST_MODE && <DeskCluster />}
+                    {W17ANT_CAST_MODE && (
+                      <DeskCluster occupied={occupiedDeskNumbers} />
+                    )}
                     {/* Desk chairs (legacy theme; the DM art has its own desks) */}
                     {!W17ANT_CAST_MODE &&
                       deskPositions.map((desk, i) => {
@@ -984,8 +1003,8 @@ export function OfficeGame(): ReactNode {
                   {/* Boss desk (W17ant workstation, drawn behind the boss) */}
                   {W17ANT_CAST_MODE && <BossDesk />}
 
-                  {/* Sol gateway corner workstations (issue 226 R5) */}
-                  {W17ANT_CAST_MODE && <SolDesks />}
+                  {/* Persistent-identity workstations (issue 226 R5) */}
+                  {W17ANT_CAST_MODE && <SolDesks present={presentPinned} />}
 
                   {/* Boss character removed (issue 226): only real agents
                       appear on the floor. His workstation stays as furniture. */}

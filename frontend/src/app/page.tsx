@@ -283,9 +283,15 @@ export default function V2TestPage(): React.ReactNode {
     typeof window !== "undefined" &&
     new URLSearchParams(window.location.search).get("embed") === "1";
   if (isEmbed) {
+    // Issue 226 R5 (operator): the homepage card carries BOTH the office and
+    // the right-hand agent panel, exactly like the standalone single view
+    // (no header, no left session sidebar).
     return (
-      <div className="w-screen h-screen overflow-hidden bg-neutral-950">
-        <OfficeGame />
+      <div className="w-screen h-screen overflow-hidden bg-neutral-950 flex gap-1 p-1">
+        <div className="flex-grow min-w-0 overflow-hidden rounded-lg border border-slate-800 bg-slate-900 relative">
+          <OfficeGame />
+        </div>
+        <RightSidebar />
       </div>
     );
   }
