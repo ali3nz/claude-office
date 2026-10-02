@@ -78,3 +78,88 @@ export const BOSS_SPOT: DeskSpot = {
   facing: "front-left",
   z: 60,
 };
+
+// ============================================================================
+// WORKSTATIONS (desks) — W17ant rooms.ts main-office furniture entries
+// ============================================================================
+
+/**
+ * The four W17ant standing-desk sprites. Each sprite already contains the
+ * full workstation: dual monitors, laptop, keyboard and mouse ("computers").
+ */
+export type DeskSpriteKind =
+  | "left-front"
+  | "left-rear"
+  | "right-front"
+  | "right-rear";
+
+/**
+ * W17ant's room is rendered at 800x600 while the art is 1200x896, and our
+ * canvas maps the art at SCALE. Sprite display sizes in W17ant's asset table
+ * (height 106 front / 102 rear) therefore scale to the canvas as:
+ *   height_canvas = height_w17ant * (ART_WIDTH / 800) * SCALE
+ */
+const W17ANT_ROOM_WIDTH = 800;
+const W17ANT_DESK_HEIGHT = { front: 106, rear: 102 } as const;
+const ART_PER_ROOM = ART_WIDTH / W17ANT_ROOM_WIDTH; // 1.5
+
+export function deskSpritePath(kind: DeskSpriteKind): string {
+  return `/sprites/furniture/standing-desk-${kind}.png`;
+}
+
+/** Canvas-space display height for a desk sprite kind. */
+export function deskSpriteHeight(kind: DeskSpriteKind): number {
+  const base = kind.endsWith("front")
+    ? W17ANT_DESK_HEIGHT.front
+    : W17ANT_DESK_HEIGHT.rear;
+  return base * ART_PER_ROOM * SCALE;
+}
+
+export interface DeskFurniture {
+  kind: DeskSpriteKind;
+  /** Bottom-center anchor (canvas px) — the desk's floor contact point. */
+  position: Position;
+}
+
+interface RawDesk {
+  k: DeskSpriteKind;
+  p: [number, number];
+}
+
+/**
+ * The 10 workstation entries from W17ant rooms.ts main-office `furniture`
+ * (desk-1a…desk-3d), converted from art percentages to canvas space.
+ * The anchor is the sprite's bottom-center (W17ant uses translate(-50%,-100%)),
+ * which is also the correct render z (front edge y) for our y-sorted layer.
+ */
+export const DESKS: DeskFurniture[] = (
+  [
+    { k: "left-rear", p: [42.4, 50.4] },
+    { k: "left-front", p: [46.7, 53] },
+    { k: "right-front", p: [39.9, 55.2] },
+    { k: "left-rear", p: [31.4, 64.8] },
+    { k: "left-front", p: [35.4, 67.5] },
+    { k: "right-front", p: [27.9, 70] },
+    { k: "left-rear", p: [59, 73.7] },
+    { k: "left-front", p: [62.6, 76] },
+    { k: "right-front", p: [55.4, 78.7] },
+    { k: "right-rear", p: [66.6, 71.1] },
+  ] as RawDesk[]
+).map(({ k, p }) => ({
+  kind: k,
+  position: artToCanvas((p[0] / 100) * ART_WIDTH, (p[1] / 100) * ART_HEIGHT),
+}));
+
+/**
+ * Boss workstation: one additional desk (not present in W17ant's main-office
+ * furniture list) placed so Michael sits behind it, mirroring the spot→desk
+ * relationship of the front desk cluster (desk bottom edge ≈ 50 canvas px
+ * below the seated agent's feet).
+ */
+export const BOSS_DESK: DeskFurniture = {
+  kind: "right-front",
+  position: artToCanvas(
+    (0.735 * ART_WIDTH) - 25,
+    (0.615 * ART_HEIGHT) + 44,
+  ),
+};

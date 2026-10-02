@@ -98,6 +98,7 @@ import { ZoomControls } from "./ZoomControls";
 import { LoadingScreen } from "./LoadingScreen";
 import { OfficeBackground } from "./OfficeBackground";
 import { AmbientStaff } from "./AmbientStaff";
+import { DeskCluster, BossDesk } from "./OfficeDesks";
 import {
   RenderStatus,
   normalizeRendererType,
@@ -721,6 +722,8 @@ export function OfficeGame(): ReactNode {
                   {/* Y-sorted layer: chairs and agents sorted by Y position (higher Y = in front) */}
                   <CoErrorBoundary label="ysort">
                   <pixiContainer sortableChildren={true}>
+                    {/* W17ant workstations (desks with computers), z-sorted with agents */}
+                    {W17ANT_CAST_MODE && <DeskCluster />}
                     {/* Desk chairs (legacy theme; the DM art has its own desks) */}
                     {!W17ANT_CAST_MODE &&
                       deskPositions.map((desk, i) => {
@@ -832,6 +835,9 @@ export function OfficeGame(): ReactNode {
                       thermosTexture={textures.thermos}
                     />
                   )}
+
+                  {/* Boss desk (W17ant workstation, drawn behind the boss) */}
+                  {W17ANT_CAST_MODE && <BossDesk />}
 
                   {/* Boss */}
                   <CoErrorBoundary label="boss">
