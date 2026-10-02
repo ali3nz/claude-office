@@ -9,9 +9,17 @@
 
 "use client";
 
-import { memo, useMemo, useState, useCallback, useRef, type ReactNode } from "react";
+import {
+  memo,
+  useMemo,
+  useState,
+  useCallback,
+  useEffect,
+  useRef,
+  type ReactNode,
+} from "react";
 import { useTick } from "@pixi/react";
-import { Graphics, TextStyle, Texture } from "pixi.js";
+import { Container, Graphics, TextStyle, Texture } from "pixi.js";
 import type { Position, BubbleContent } from "@/types";
 import type { AgentPhase } from "@/stores/gameStore";
 import { useAttentionStore } from "@/stores/attentionStore";
@@ -28,6 +36,7 @@ import {
   getFacingFromDelta,
   type OfficeFacing,
 } from "@/themes/w17ant-cast";
+import { getOffset } from "@/systems/officeBehavior";
 
 // ============================================================================
 // TYPES
@@ -67,6 +76,20 @@ const STROKE_WIDTH = 4;
 
 /** Cast sprite display height on the canvas (W17ant ratio-preserving). */
 const CAST_SPRITE_HEIGHT = 133;
+
+/**
+ * Issue 226 R4 (Sol): idle glance is a LOOK to the other side, not a turn
+ * away from the desk, so left/right are mirrored.
+ */
+const MIRROR_FACING: Record<OfficeFacing, OfficeFacing> = {
+  "front-left": "front-right",
+  "front-right": "front-left",
+  "rear-left": "rear-right",
+  "rear-right": "rear-left",
+};
+
+/** Global cap so idle glances never turn into synchronized floor motion. */
+let lastGlanceAt = 0;
 
 // ============================================================================
 // DRAWING FUNCTIONS
@@ -224,19 +247,112 @@ function AgentSpriteComponent({
   // eslint-disable-next-line react-hooks/refs
   const dy = wp.y - prevPosRef.current.y;
   const moving = Math.abs(dx) + Math.abs(dy) > 0.01;
-  if (moving) {
-    // eslint-disable-next-line react-hooks/refs
-    facingRef.current = getFacingFromDelta(dx, dy);
-  } else if (seatFacing) {
-    // Issue 226 R2: seated characters face their monitors, not the last
-    // walking direction (the "staring at the wall" defect).
-    // eslint-disable-next-line react-hooks/refs
-    facingRef.current = seatFacing;
-  }
   // eslint-disable-next-line react-hooks/refs
   prevPosRef.current = wp;
+
+  // ---- Issue 226 R4: procedural aliveness (Sol-approved) ----------------
+  // Walking facing for BEHAVIOR-driven walks: the engine moves the enclosing
+  // BehaviorGroup through a pixi ticker (no React re-render), so direction is
+  // read from the offset delta and React state changes only on a real turn.
+  const [behaviorFacing, setBehaviorFacing] = useState<OfficeFacing | null>(null);
+  const behaviorFacingRef = useRef<OfficeFacing | null>(null);
+  const lastOffRef = useRef({ x: 0, y: 0 });
+  const lastMoveAtRef = useRef(0);
+
+  // Idle glance: a seated, genuinely idle agent occasionally looks to the
+  // other side, then restores its workstation facing.
+  const [glanceFacing, setGlanceFacing] = useState<OfficeFacing | null>(null);
+  const glanceRef = useRef({
+    nextAt: Date.now() + 8_000 + Math.random() * 12_000,
+    untilAt: 0,
+    active: false,
+  });
+
+  // Typing jitter + breathing bob are sprite-local (never the shared offset).
+  const typingRef = useRef(_isTyping);
+  useEffect(() => {
+    typingRef.current = _isTyping;
+  }, [_isTyping]);
+  const microRef = useRef<Container | null>(null);
+  const breathSeedRef = useRef<number | null>(null);
+  if (breathSeedRef.current === null) {
+    // Stable per-agent phase so breathing never synchronizes across the floor.
+    let h = 0;
+    for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) | 0;
+    breathSeedRef.current = Math.abs(h % 6283) / 1000;
+  }
+
+  useTick(() => {
+    const now = Date.now();
+    // ---- walking facing (behavior walks only) ----
+    const off = getOffset(id);
+    const mdx = off.x - lastOffRef.current.x;
+    const mdy = off.y - lastOffRef.current.y;
+    lastOffRef.current = off;
+    const walking = Math.abs(mdx) + Math.abs(mdy) > 0.5;
+    if (walking) {
+      lastMoveAtRef.current = now;
+      const f = getFacingFromDelta(mdx, mdy);
+      if (f !== behaviorFacingRef.current) {
+        behaviorFacingRef.current = f;
+        setBehaviorFacing(f);
+      }
+    } else if (
+      behaviorFacingRef.current !== null &&
+      now - lastMoveAtRef.current > 150
+    ) {
+      behaviorFacingRef.current = null;
+      setBehaviorFacing(null);
+    }
+
+    // ---- idle glance ----
+    const glance = glanceRef.current;
+    const idleEnough = !!seatFacing && !walking && !typingRef.current;
+    if (glance.active) {
+      if (now >= glance.untilAt || !idleEnough) {
+        glance.active = false;
+        glance.nextAt = now + 15_000 + Math.random() * 25_000;
+        lastGlanceAt = now;
+        setGlanceFacing(null);
+      }
+    } else if (
+      idleEnough &&
+      now >= glance.nextAt &&
+      now - lastGlanceAt > 4_000
+    ) {
+      glance.active = true;
+      glance.untilAt = now + 1_500 + Math.random() * 2_500;
+      lastGlanceAt = now;
+      setGlanceFacing(MIRROR_FACING[seatFacing] ?? null);
+    }
+
+    // ---- sprite-local micro transform ----
+    const node = microRef.current;
+    if (node) {
+      const t = now / 1000;
+      const breathe =
+        Math.sin((t * Math.PI * 2) / 5 + (breathSeedRef.current ?? 0)) * 1;
+      let jx = 0;
+      let jy = 0;
+      if (typingRef.current) {
+        jx = Math.sin(t * 47) * 1.2;
+        jy = Math.sin(t * 61 + 1.7) * 0.8;
+      }
+      node.x = jx;
+      node.y = breathe + jy;
+    }
+  });
+
+  // ---- facing precedence (Sol): behavior walk > legacy walk > glance > seat
   // eslint-disable-next-line react-hooks/refs
-  const facing = facingRef.current;
+  const facing =
+    behaviorFacing ??
+    (moving ? getFacingFromDelta(dx, dy) : null) ??
+    glanceFacing ??
+    seatFacing ??
+    facingRef.current;
+  // eslint-disable-next-line react-hooks/refs
+  facingRef.current = facing;
 
   const castTexture = useCastTexture(slug, facing);
 
@@ -271,18 +387,23 @@ function AgentSpriteComponent({
       interactive={clickToFocusEnabled}
     >
       {/* W17ant Office cast sprite (fallback: legacy capsule) */}
-      {castTexture ? (
-        <pixiSprite
-          texture={castTexture}
-          anchor={{ x: 0.5, y: 1 }}
-          x={0}
-          y={0}
-          height={CAST_SPRITE_HEIGHT}
-          width={castTexture.width * (CAST_SPRITE_HEIGHT / castTexture.height)}
-        />
-      ) : (
-        <pixiGraphics draw={drawCallback} />
-      )}
+      {/* Issue 226 R4: sprite-local micro animation container. The shared
+          locomotion offset (BehaviorGroup) and the label/bubble layers are
+          never touched by this transform. */}
+      <pixiContainer ref={microRef}>
+        {castTexture ? (
+          <pixiSprite
+            texture={castTexture}
+            anchor={{ x: 0.5, y: 1 }}
+            x={0}
+            y={0}
+            height={CAST_SPRITE_HEIGHT}
+            width={castTexture.width * (CAST_SPRITE_HEIGHT / castTexture.height)}
+          />
+        ) : (
+          <pixiGraphics draw={drawCallback} />
+        )}
+      </pixiContainer>
 
       {/* Agent name if present - hide when in elevator or when renderLabel is false */}
       {renderLabel && name && !isInElevatorZone(position) && (
@@ -405,12 +526,20 @@ export const AgentHeadset = memo(AgentHeadsetComponent);
 export interface AgentLabelProps {
   name: string;
   position: Position;
+  /** Issue 226 R4 (Sol): compact state/activity glyph above the name. */
+  glyph?: string | null;
 }
 
-function AgentLabelComponent({ name, position }: AgentLabelProps): ReactNode {
+function AgentLabelComponent({
+  name,
+  position,
+  glyph,
+}: AgentLabelProps): ReactNode {
   coMark("label");
   return (
-    <pixiContainer x={position.x} y={position.y - 70} scale={0.5}>
+    // Issue 226 R4: label sits ABOVE the sprite head (133px tall) instead of
+    // across the character's chest.
+    <pixiContainer x={position.x} y={position.y - 152} scale={0.5}>
       <pixiText
         text={name}
         anchor={0.5}
@@ -423,6 +552,15 @@ function AgentLabelComponent({ name, position }: AgentLabelProps): ReactNode {
         }}
         resolution={2}
       />
+      {glyph ? (
+        <pixiText
+          text={glyph}
+          anchor={0.5}
+          y={-36}
+          style={{ fontSize: 26 }}
+          resolution={2}
+        />
+      ) : null}
     </pixiContainer>
   );
 }

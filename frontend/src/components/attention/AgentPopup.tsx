@@ -112,6 +112,24 @@ export default function AgentPopup(): ReactNode {
             </span>{" "}
             {displayType}
           </div>
+          {!isBoss && agent && (
+            <div>
+              <span className="text-neutral-600">
+                {t("attention.popup.activity")}:
+              </span>{" "}
+              {agent.isTyping
+                ? t("attention.popup.activityTyping")
+                : t("attention.popup.activityIdle")}
+            </div>
+          )}
+          {!isBoss && agent?.parentSessionId && (
+            <div className="truncate">
+              <span className="text-neutral-600">
+                {t("attention.popup.parent")}:
+              </span>{" "}
+              {agent.parentSessionId.slice(0, 18)}
+            </div>
+          )}
         </div>
 
         <div className="flex gap-2">

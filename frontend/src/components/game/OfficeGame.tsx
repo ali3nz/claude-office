@@ -297,6 +297,36 @@ function agentDisplayPosition(agent: {
   return agent.currentPosition;
 }
 
+/**
+ * Issue 226 R4 (Sol): compact on-character state cue. isTyping is used as an
+ * ACTIVITY cue (it wins); otherwise the authoritative backend state. Reuses
+ * existing state - no new data source, no second panel.
+ */
+function agentStateGlyph(agent: {
+  isTyping: boolean;
+  backendState: string;
+}): string | null {
+  if (agent.isTyping) return "\u2328\ufe0f";
+  switch (agent.backendState) {
+    case "working":
+      return "\u2699\ufe0f";
+    case "thinking":
+      return "\ud83e\udd14";
+    case "waiting_permission":
+      return "\u23f3";
+    case "waiting":
+    case "idle":
+      return "\ud83d\udca4";
+    case "reporting":
+    case "reporting_done":
+      return "\ud83d\udce3";
+    case "completed":
+      return "\u2705";
+    default:
+      return null;
+  }
+}
+
 /** Only agents on the room floor are drawn (departures and strays hidden). */
 function isVisibleAgent(agent: {
   phase: string;
@@ -332,6 +362,9 @@ function BehaviorGroup({
     if (node) {
       node.x = baseX + off.x;
       node.y = baseY + off.y;
+      // Issue 226 R4 (Sol): depth must follow the DISPLAYED world Y while an
+      // agent walks across furniture rows, not the static seat Y.
+      if (zIndex !== undefined) node.zIndex = zIndex + off.y;
     }
   });
   return (
@@ -527,14 +560,7 @@ export function OfficeGame(): ReactNode {
   // already has (no new authoritative source): consult agents walk to a Sol
   // gateway character; idle agents take coffee/water breaks; everyone else
   // stays at their workstation. Presentation only.
-  const DISABLE_WANDER = true; // wandering paused: offset model needs fixing
   useEffect(() => {
-    if (DISABLE_WANDER) {
-      for (const a of agents.values()) {
-        setBehavior(a.id, { mode: "seat", seat: a.currentPosition, target: null });
-      }
-      return;
-    }
     const list = Array.from(agents.values());
     const sols = list.filter(
       (a) => a.name === "Sol Docker" || a.name === "Sol Webserver",
@@ -545,6 +571,11 @@ export function OfficeGame(): ReactNode {
       return Math.abs(h);
     };
     for (const a of list) {
+      // Issue 226 R4 (Sol): the behavior engine's seat MUST be the same
+      // absolute coordinate the render anchor uses (agentDisplayPosition =
+      // desk seat), never the animated currentPosition. Offsets stay relative
+      // to that seat; targets stay absolute.
+      const seat = agentDisplayPosition(a);
       const hay = `${a.name ?? ""} ${a.currentTask ?? ""} ${
         a.bubble.content?.text ?? ""
       }`.toLowerCase();
@@ -552,19 +583,20 @@ export function OfficeGame(): ReactNode {
       const consulting = !isSol && /consult|\bsol\b/.test(hay) && sols.length > 0;
       if (consulting) {
         const sol = sols[hashId(a.id) % sols.length];
+        const solSeat = agentDisplayPosition(sol);
         setBehavior(a.id, {
           mode: "consult",
-          seat: a.currentPosition,
-          target: { x: sol.currentPosition.x + 30, y: sol.currentPosition.y + 8 },
+          seat,
+          target: { x: solSeat.x + 30, y: solSeat.y + 8 },
         });
       } else if (!isSol && a.phase === "idle") {
         setBehavior(a.id, {
           mode: "break",
-          seat: a.currentPosition,
+          seat,
           target: hashId(a.id) % 2 === 0 ? COFFEE_SPOT : WATER_SPOT,
         });
       } else {
-        setBehavior(a.id, { mode: "seat", seat: a.currentPosition, target: null });
+        setBehavior(a.id, { mode: "seat", seat, target: null });
       }
     }
   }, [agents]);
@@ -925,7 +957,11 @@ export function OfficeGame(): ReactNode {
                         baseX={agentDisplayPosition(agent).x}
                         baseY={agentDisplayPosition(agent).y}
                       >
-                        <AgentLabel name={agent.name!} position={{ x: 0, y: 0 }} />
+                        <AgentLabel
+                          name={agent.name!}
+                          position={{ x: 0, y: 0 }}
+                          glyph={agentStateGlyph(agent)}
+                        />
                       </BehaviorGroup>
                     ))}
 

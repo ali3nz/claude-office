@@ -90,6 +90,14 @@ export function AgentStatus() {
   // Sort by number for consistent ordering
   agentArray.sort((a, b) => a.number - b.number);
 
+  // Issue 226 R4 (Sol): compact room summary ("3 working, 1 idle, ...").
+  const stateSummary = Array.from(
+    agentArray.reduce((m, a) => {
+      m.set(a.backendState, (m.get(a.backendState) ?? 0) + 1);
+      return m;
+    }, new Map<string, number>()),
+  ).sort((a, b) => b[1] - a[1]);
+
   return (
     <div className="flex flex-col bg-slate-950 border border-slate-800 rounded-lg overflow-hidden font-mono text-xs h-full">
       {/* Header */}
@@ -107,6 +115,20 @@ export function AgentStatus() {
           </span>
         </div>
       </div>
+
+      {/* Issue 226 R4 (Sol): room summary strip — reuse real state. */}
+      {stateSummary.length > 0 && (
+        <div className="px-3 py-1.5 border-b border-slate-800 flex flex-wrap gap-1 flex-shrink-0">
+          {stateSummary.map(([state, count]) => (
+            <span
+              key={state}
+              className={`px-1.5 py-0.5 rounded text-[9px] uppercase font-semibold border ${getBackendStateColor(state)}`}
+            >
+              {count} {formatState(state)}
+            </span>
+          ))}
+        </div>
+      )}
 
       {/* Agent list - scrollable, fills remaining height */}
       <div className="flex-grow overflow-y-auto p-2 space-y-2 min-h-0">
