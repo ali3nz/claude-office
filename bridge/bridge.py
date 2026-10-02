@@ -300,8 +300,14 @@ def translate_gateway(line):
     if event == "session_start":
         data.update({"agent_name": meta["name"], "agent_type": meta["agent_type"],
                      "task_description": "catgpt gateway"})
-        return {"session_id": sid, "timestamp": stamp,
-                "event_type": "subagent_start", "data": data}, key, sid
+        # Two envelopes: the session boundary (so the gateway session is a
+        # first-class listed session) and the character spawn.
+        return [
+            {"session_id": sid, "timestamp": stamp,
+             "event_type": "session_start", "data": data},
+            {"session_id": sid, "timestamp": stamp,
+             "event_type": "subagent_start", "data": data},
+        ], key, sid
     if event == "tool_start":
         data.update({"tool_name": "catgpt-gateway"})
         return {"session_id": sid, "timestamp": stamp,
@@ -339,6 +345,20 @@ def load_state():
             state.setdefault("cursors", {})
             state.setdefault("sent", [])
             state.setdefault("live", {})
+            # A feed that was ADDED after the state file existed has no cursor
+            # yet: with START_AT_END, start it at the current live edge instead
+            # of replaying the whole file (issue 221: adding FEED_AG must not
+            # backfill days of historical gateway pulses).
+            if START_AT_END:
+                for path in (FEED_KIT, FEED_OC, FEED_FB, FEED_AG):
+                    if path in state["cursors"]:
+                        continue
+                    try:
+                        with open(path, encoding="utf-8") as fh:
+                            state["cursors"][path] = sum(1 for _ in fh)
+                        log("new feed %s starts at live edge" % path)
+                    except OSError:
+                        pass
             return state
     except (OSError, ValueError):
         pass
@@ -412,16 +432,23 @@ def run_once(state):
                 continue
             if env is None:
                 continue
-            if not post_envelope(env):
+            envs = env if isinstance(env, list) else [env]
+            post_failed = False
+            for one in envs:
+                if not post_envelope(one):
+                    post_failed = True
+                    break
+                time.sleep(POST_DELAY)
+                posted += 1
+            if post_failed:
                 advanced -= 1
                 failed += 1
                 break
-            time.sleep(POST_DELAY)
             sent_set.add(key)
-            posted += 1
             if len(sent_set) > SENT_CAP:
                 sent_set = set(list(sent_set)[-SENT_CAP:])
-            if env["event_type"] == "session_start":
+            env = envs[-1]
+            if any(e["event_type"] == "session_start" for e in envs):
                 live[sid] = {"agent": item.get("agentSessionId") or item.get("session_id"),
                              "source": source,
                              "run": item.get("runNumber")}
@@ -497,12 +524,13 @@ def selftest():
           "label": "SECRET-LABEL", "detail": "in use by SECRET-USER",
           "preview": "SECRET-PREVIEW"}
     env5, key5, sid5 = translate_gateway(gw)
-    assert env5 is not None and key5 is not None, (env5, key5)
-    assert env5["event_type"] == "subagent_start", env5
+    assert isinstance(env5, list) and len(env5) == 2, env5
+    assert [e["event_type"] for e in env5] == ["session_start", "subagent_start"], env5
+    assert key5 is not None, key5
     assert sid5 == "ag-agentchat-sol-webserver", sid5
-    assert env5["data"]["agent_id"] == "gateway-webserver", env5
-    assert env5["data"]["agent_name"] == "Sol Webserver", env5
-    assert env5["data"]["agent_type"] == "gateway-webserver", env5
+    assert env5[1]["data"]["agent_id"] == "gateway-webserver", env5[1]
+    assert env5[1]["data"]["agent_name"] == "Sol Webserver", env5[1]
+    assert env5[1]["data"]["agent_type"] == "gateway-webserver", env5[1]
     blob = json.dumps(env5)
     assert "SECRET" not in blob, blob
     gw2 = {"session_id": "agentchat-sol-dockerhost", "platform": "cli",
