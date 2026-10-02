@@ -1,13 +1,18 @@
 /**
  * OfficeBackground Component
  *
- * Renders the office floor, walls, and tile pattern using sprites.
+ * W17ant Office theme (issue 212): renders the real Dunder Mifflin room art
+ * (day/night by wall-clock) stretched to the canvas, letterboxed with the
+ * theme wall color. Falls back to the legacy procedural floor while the art
+ * loads or if it is missing.
  */
 
 import { type ReactNode, useMemo, useCallback } from "react";
-import { Graphics, Texture } from "pixi.js";
+import { Graphics } from "pixi.js";
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from "@/constants/canvas";
 import { ORCHESTRA_PALETTE } from "@/themes/orchestra-office";
+import { usePixiTexture } from "@/hooks/usePixiTexture";
+import { getRoomImage } from "@/themes/w17ant-cast";
 
 // ============================================================================
 // CONSTANTS
@@ -23,25 +28,12 @@ const FLOOR_COLOR = ORCHESTRA_PALETTE.floor;
 const WALL_COLOR = ORCHESTRA_PALETTE.wall;
 const WALL_TRIM_COLOR = ORCHESTRA_PALETTE.wallTrim;
 const FLOOR_TILE_DARK = ORCHESTRA_PALETTE.floorTileDark;
-const DESK_WOOD = ORCHESTRA_PALETTE.deskWood;
-const DESK_WOOD_LIGHT = ORCHESTRA_PALETTE.deskWoodLight;
-const GLOW_WARM = ORCHESTRA_PALETTE.glowWarm;
-const GLOW_WARM_ALPHA = ORCHESTRA_PALETTE.glowWarmAlpha;
-const GLOW_MONITOR = ORCHESTRA_PALETTE.glowMonitor;
-const GLOW_MONITOR_ALPHA = ORCHESTRA_PALETTE.glowMonitorAlpha;
 
-// Desk band depth along the wall (W17ant-style furniture strip)
-const DESK_BAND_HEIGHT = 22;
-// Spacing of monitor glow patches across the desk band
-const MONITOR_GLOW_SPACING = 320;
-const MONITOR_GLOW_WIDTH = 84;
-
-// ============================================================================
-// TYPES
-// ============================================================================
+// DM room art native size (1200×896) mapped to full canvas
+const ART_ASPECT = 1200 / 896;
 
 interface OfficeBackgroundProps {
-  floorTileTexture?: Texture | null;
+  floorTileTexture?: import("pixi.js").Texture | null;
 }
 
 interface TileData {
@@ -60,7 +52,7 @@ const TILE_TINT_DARK = FLOOR_TILE_DARK;
 // ============================================================================
 
 /**
- * Draws the office walls (no floor - that's handled by sprites).
+ * Draws the legacy walls + floor (fallback behind/instead of room art).
  */
 function drawWalls(g: Graphics): void {
   g.clear();
@@ -76,26 +68,6 @@ function drawWalls(g: Graphics): void {
   // Wall base trim
   g.rect(0, WALL_HEIGHT - WALL_TRIM_HEIGHT, CANVAS_WIDTH, WALL_TRIM_HEIGHT);
   g.fill(WALL_TRIM_COLOR);
-
-  // Desk band along the wall (W17ant desk-wood strip with top highlight)
-  g.rect(0, WALL_HEIGHT, CANVAS_WIDTH, DESK_BAND_HEIGHT);
-  g.fill(DESK_WOOD);
-  g.rect(0, WALL_HEIGHT, CANVAS_WIDTH, 4);
-  g.fill(DESK_WOOD_LIGHT);
-
-  // Warm lamp glow pooling over the desk band
-  g.rect(0, WALL_HEIGHT - 28, CANVAS_WIDTH, DESK_BAND_HEIGHT + 46);
-  g.fill({ color: GLOW_WARM, alpha: GLOW_WARM_ALPHA });
-
-  // Cool monitor glow patches along the desk band
-  for (
-    let x = MONITOR_GLOW_SPACING / 2;
-    x < CANVAS_WIDTH;
-    x += MONITOR_GLOW_SPACING
-  ) {
-    g.rect(x - MONITOR_GLOW_WIDTH / 2, WALL_HEIGHT + 2, MONITOR_GLOW_WIDTH, 10);
-    g.fill({ color: GLOW_MONITOR, alpha: GLOW_MONITOR_ALPHA });
-  }
 }
 
 // ============================================================================
@@ -105,7 +77,10 @@ function drawWalls(g: Graphics): void {
 export function OfficeBackground({
   floorTileTexture,
 }: OfficeBackgroundProps): ReactNode {
-  // Generate tile positions with alternating rotations and tints
+  const roomUrl = useMemo(() => getRoomImage(), []);
+  const roomTexture = usePixiTexture(roomUrl);
+
+  // Generate tile positions with alternating rotations and tints (fallback)
   const tiles = useMemo(() => {
     const result: TileData[] = [];
     const startY = WALL_HEIGHT;
@@ -130,24 +105,48 @@ export function OfficeBackground({
   // Stable reference for wall drawing
   const drawWallsCallback = useCallback((g: Graphics) => drawWalls(g), []);
 
+  // Room-art geometry: fill the canvas, preserving aspect (slight crop OK)
+  const artGeom = useMemo(() => {
+    const byHeight = CANVAS_HEIGHT * ART_ASPECT;
+    if (byHeight >= CANVAS_WIDTH) {
+      const w = byHeight;
+      return { x: (CANVAS_WIDTH - w) / 2, y: 0, w, h: CANVAS_HEIGHT };
+    }
+    const h = CANVAS_WIDTH / ART_ASPECT;
+    return { x: 0, y: (CANVAS_HEIGHT - h) / 2, w: CANVAS_WIDTH, h };
+  }, []);
+
   return (
     <>
-      {/* Walls and floor background */}
+      {/* Walls and floor background (also the letterbox behind art) */}
       <pixiGraphics draw={drawWallsCallback} />
 
-      {/* Floor tiles with alternating rotations and tints */}
-      {floorTileTexture &&
-        tiles.map((tile, index) => (
-          <pixiSprite
-            key={index}
-            texture={floorTileTexture}
-            x={tile.x}
-            y={tile.y}
-            anchor={0.5}
-            rotation={tile.rotation}
-            tint={tile.tint}
-          />
-        ))}
+      {roomTexture ? (
+        /* The real Dunder Mifflin floor art */
+        <pixiSprite
+          texture={roomTexture}
+          x={artGeom.x}
+          y={artGeom.y}
+          width={artGeom.w}
+          height={artGeom.h}
+        />
+      ) : (
+        <>
+          {/* Fallback: procedural floor tiles while art loads */}
+          {floorTileTexture &&
+            tiles.map((tile, index) => (
+              <pixiSprite
+                key={index}
+                texture={floorTileTexture}
+                x={tile.x}
+                y={tile.y}
+                anchor={0.5}
+                rotation={tile.rotation}
+                tint={tile.tint}
+              />
+            ))}
+        </>
+      )}
     </>
   );
 }

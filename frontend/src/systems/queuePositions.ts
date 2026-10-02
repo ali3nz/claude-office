@@ -11,18 +11,18 @@
  */
 
 import { Position } from "@/types";
-import { DESKS_PER_ROW } from "@/constants/positions";
+import { getSpotForDesk, artToCanvas } from "@/themes/w17ant-spots";
 
 // Boss desk positions (where agents stand IN FRONT of the desk)
-// Boss desk center at y:928 (grid-aligned 29*32)
-// Agents stand 60px above desk center so pathfinding can reach them
-export const BOSS_SLOT_LEFT: Position = { x: 520, y: 868 }; // Getting work (arrivals)
-export const BOSS_SLOT_RIGHT: Position = { x: 760, y: 868 }; // Receiving work (departures)
+// W17ant Office theme: boss is at the DM-art desk (≈962, 630 on canvas);
+// slots flank the desk surface, clear of its obstacle rectangle.
+export const BOSS_SLOT_LEFT: Position = { x: 842, y: 610 }; // Getting work (arrivals)
+export const BOSS_SLOT_RIGHT: Position = { x: 1082, y: 610 }; // Receiving work (departures)
 
 // Boss center position (for rendering)
 // Desk visual: drawn 20px below boss with 80px height → desk center = boss_y + 60
 // For desk center at y=960 (grid-aligned 30*32), boss is at y=900
-export const BOSS_POSITION: Position = { x: 640, y: 900 };
+export const BOSS_POSITION: Position = artToCanvas(0.735 * 1200, 0.615 * 896);
 
 // Elevator position (DO NOT CHANGE - this is the elevator's fixed location)
 export const ELEVATOR_POSITION: Position = { x: 86, y: 178 };
@@ -127,34 +127,30 @@ export function isInElevatorZone(pos: Position): boolean {
   );
 }
 
-// Arrival queue positions (left side, horizontal then vertical L-shape)
-// Position 0 (A0) is the "ready" spot where agent waits before approaching boss
-// Position 1+ are waiting spots in the queue line
-// A0-A2: horizontal along bottom, A3-A7: vertical going up (above printer)
+// Arrival queue positions (W17ant theme: line forms left of the DM boss desk,
+// along the front of the main floor; clear of desk-spot obstacles).
 export const ARRIVAL_QUEUE_POSITIONS: Position[] = [
-  { x: 480, y: 930 }, // Position 0 (A0 - ready spot, left of boss desk)
-  { x: 330, y: 930 }, // Position 1 (first waiting spot)
-  { x: 190, y: 930 }, // Position 2 (horizontal)
-  { x: 70, y: 820 }, // Position 3 (moved up - above printer)
-  { x: 70, y: 710 }, // Position 4 (vertical going up)
-  { x: 70, y: 600 }, // Position 5
-  { x: 70, y: 490 }, // Position 6
-  { x: 70, y: 380 }, // Position 7
+  { x: 726, y: 588 }, // Position 0 (A0 - ready spot, left of boss desk)
+  { x: 580, y: 588 }, // Position 1 (first waiting spot)
+  { x: 434, y: 588 }, // Position 2
+  { x: 288, y: 588 }, // Position 3
+  { x: 180, y: 530 }, // Position 4
+  { x: 180, y: 440 }, // Position 5
+  { x: 180, y: 350 }, // Position 6
+  { x: 180, y: 270 }, // Position 7
 ];
 
-// Departure queue positions (right side, horizontal then vertical L-shape)
-// Position 0 (D0) is the "ready" spot where agent waits before approaching boss
-// Position 1+ are waiting spots in the queue line
-// D0-D3: horizontal along bottom, D4-D7: vertical going up
+// Departure queue positions (W17ant theme: exits right of the DM boss desk,
+// mirrored L-shape; clear of desk-spot obstacles).
 export const DEPARTURE_QUEUE_POSITIONS: Position[] = [
-  { x: 800, y: 930 }, // Position 0 (D0 - ready spot, right of boss desk)
-  { x: 950, y: 930 }, // Position 1 (first waiting spot)
-  { x: 1090, y: 930 }, // Position 2 (horizontal)
-  { x: 1210, y: 930 }, // Position 3 (corner)
-  { x: 1210, y: 820 }, // Position 4 (vertical going up)
-  { x: 1210, y: 710 }, // Position 5
-  { x: 1210, y: 600 }, // Position 6
-  { x: 1210, y: 490 }, // Position 7
+  { x: 1198, y: 588 }, // Position 0 (D0 - ready spot, right of boss desk)
+  { x: 1240, y: 700 }, // Position 1
+  { x: 1240, y: 800 }, // Position 2
+  { x: 1240, y: 900 }, // Position 3
+  { x: 1100, y: 940 }, // Position 4
+  { x: 940, y: 940 }, // Position 5
+  { x: 780, y: 940 }, // Position 6
+  { x: 640, y: 940 }, // Position 7
 ];
 
 export type QueueType = "arrival" | "departure";
@@ -226,17 +222,8 @@ export function calculateQueueSlots(
  * Grid-aligned: X at multiples of 32, row spacing 192 (6×32)
  */
 export function getDeskPosition(deskNum: number): Position {
-  const rowSize = DESKS_PER_ROW;
-  const index = deskNum - 1;
-  const row = Math.floor(index / rowSize);
-  const col = index % rowSize;
-  // Grid-aligned positions: 256, 512, 768, 1024
-  const xStart = 256;
-  // Chair center is at desk origin (408) + 30 = 438
-  // Agent body center should be 24px above chair (like boss): 438 - 24 = 414
-  // Agent bottom circle center is 18px below body center: 414 + 18 = 432
-  return {
-    x: xStart + col * 256,
-    y: 432 + row * 192, // Agent bottom circle center for proper chair seating
-  };
+  // W17ant Office theme (issue 212): desks are the real DM-floor art spots
+  // (ported from W17ant rooms.ts main-office agentSpots), cycled by desk
+  // number. The position is the agent's sprite anchor (feet / bottom-center).
+  return getSpotForDesk(deskNum).position;
 }

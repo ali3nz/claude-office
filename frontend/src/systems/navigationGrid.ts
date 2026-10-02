@@ -7,6 +7,7 @@
 
 import { Position } from "@/types";
 import { ELEVATOR_ZONE } from "./queuePositions";
+import { DESK_SPOTS, BOSS_SPOT } from "@/themes/w17ant-spots";
 
 // Grid configuration
 export const TILE_SIZE = 32;
@@ -38,19 +39,11 @@ export const TILE_COSTS: Record<TileType, number> = {
 const OBSTACLE_PADDING = 15;
 
 const WALL_Y_END = 232 + OBSTACLE_PADDING; // Wall visual end + padding (one extra row)
-// Desk obstacles cover the desk SURFACE with padding
-// Chair positions (y=400, y=592) left walkable as destinations
-// Row 0: chair at y=400, desk surface at 440-520 (center 480 = 15*32)
-// Top row removed (+32) to allow agents to walk closer to desks
-const DESK_ROW_0_Y = 488 - OBSTACLE_PADDING; // Top of desk row 0 with padding
-const DESK_ROW_0_Y_END = 536 + OBSTACLE_PADDING; // Bottom of desk row 0 with padding
-// Row 1: chair at y=592, desk surface at 632-712 (center 672 = 21*32)
-const DESK_ROW_1_Y = 680 - OBSTACLE_PADDING; // Top of desk row 1 with padding
-const DESK_ROW_1_Y_END = 728 + OBSTACLE_PADDING; // Bottom of desk row 1 with padding
-// Grid-aligned X positions: 256, 512, 768, 1024 (all multiples of 32)
-const DESK_X_POSITIONS = [256, 512, 768, 1024]; // Center X of each desk column
+// W17ant Office theme (issue 212): desk obstacles are derived from the DM-art
+// desk spots. Agents seated with rear-* facings sit IN FRONT of their desk
+// (W17ant zIndex >= 70), so the desk surface sits above their feet; front-*
+// agents sit BEHIND their desk, so the surface sits below their feet.
 const DESK_HALF_WIDTH = 70 + OBSTACLE_PADDING; // Desk visual half-width + padding
-// Desk half height matches the calculated deskHalfH in initializeStaticGrid
 
 // Elevator bounds derived from ELEVATOR_ZONE (single source of truth)
 const ELEVATOR_X = (ELEVATOR_ZONE.minX + ELEVATOR_ZONE.maxX) / 2; // 76
@@ -58,11 +51,11 @@ const ELEVATOR_Y = ELEVATOR_ZONE.minY; // 90
 const ELEVATOR_WIDTH = ELEVATOR_ZONE.maxX - ELEVATOR_ZONE.minX; // 112
 const ELEVATOR_HEIGHT = ELEVATOR_ZONE.maxY - ELEVATOR_ZONE.minY; // 210
 
-const BOSS_DESK_X = 640;
-// Boss at y=900, desk drawn 20px below with 80px height → desk center at y=960
-const BOSS_DESK_Y = 960; // Grid-aligned: 30*32 = 960
-const BOSS_DESK_HALF_WIDTH = 80 + OBSTACLE_PADDING;
-const BOSS_DESK_HALF_HEIGHT = 40 + OBSTACLE_PADDING;
+const BOSS_DESK_X = BOSS_SPOT.position.x + 40; // desk surface sits right of Michael
+// Boss desk surface sits between the boss and the viewer (below his feet)
+const BOSS_DESK_Y = BOSS_SPOT.position.y + 36;
+const BOSS_DESK_HALF_WIDTH = 60; // narrow: spot-10 seat tile must stay clear
+const BOSS_DESK_HALF_HEIGHT = 22;
 
 // Printer station (bottom left corner) - only bottom portion blocked
 const PRINTER_X = 50;
@@ -144,26 +137,22 @@ export class NavigationGrid {
       }
     }
 
-    // Mark desks as obstacles
-    for (let row = 0; row < 2; row++) {
-      const deskY =
-        row === 0
-          ? (DESK_ROW_0_Y + DESK_ROW_0_Y_END) / 2
-          : (DESK_ROW_1_Y + DESK_ROW_1_Y_END) / 2;
-      const deskHalfH =
-        row === 0
-          ? (DESK_ROW_0_Y_END - DESK_ROW_0_Y) / 2
-          : (DESK_ROW_1_Y_END - DESK_ROW_1_Y) / 2;
-
-      for (const deskX of DESK_X_POSITIONS) {
-        this.markRectangle(
-          deskX - DESK_HALF_WIDTH,
-          deskY - deskHalfH,
-          deskX + DESK_HALF_WIDTH,
-          deskY + deskHalfH,
-          TileType.DESK,
-        );
-      }
+    // Mark desks as obstacles (one rectangle per DM-art desk spot).
+    // markRectangle end bounds are ceil-exclusive, so clamp them to rows
+    // strictly above/below the seat row: the seat tile itself must stay
+    // walkable or arriving agents strand (issue 212 seat test).
+    for (const spot of DESK_SPOTS) {
+      const seatRow = Math.floor(spot.position.y / TILE_SIZE);
+      const inFront = spot.z >= 70; // rear-* agents: desk behind them (above)
+      const y1 = inFront ? spot.position.y - 72 : (seatRow + 1) * TILE_SIZE;
+      const y2 = inFront ? seatRow * TILE_SIZE - 1 : spot.position.y + 68;
+      this.markRectangle(
+        spot.position.x - DESK_HALF_WIDTH,
+        y1,
+        spot.position.x + DESK_HALF_WIDTH,
+        y2,
+        TileType.DESK,
+      );
     }
 
     // Mark boss desk as obstacle

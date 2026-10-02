@@ -1,8 +1,9 @@
 /**
  * BossSprite Component
  *
- * Renders the boss character at their desk with state-based coloring.
- * Uses sprites for desk, chair, keyboard, monitor, and phone like agent desks.
+ * W17ant Office theme (issue 212): the boss is Michael Scott, drawn as the
+ * W17ant cast sprite with desk/chair/monitor furniture retained for
+ * state readability. Fallback: legacy black capsule while textures load.
  */
 
 "use client";
@@ -16,6 +17,8 @@ import { ICON_MAP } from "./shared/iconMap";
 import { drawBubble, drawIconBadge } from "./shared/drawBubble";
 import { drawRightArm, drawLeftArm } from "./shared/drawArm";
 import { truncateBubbleText } from "@/utils/bubbleText";
+import { useCastTexture } from "@/hooks/useCastTexture";
+import { BOSS_SLUG } from "@/themes/w17ant-cast";
 
 // ============================================================================
 // TYPES
@@ -46,6 +49,9 @@ export interface BossSpriteProps {
 const BOSS_WIDTH = 48; // 1.5 blocks × 32px
 const BOSS_HEIGHT = 80; // 2.5 blocks × 32px
 const STROKE_WIDTH = 4;
+
+/** Michael Scott sprite display height (slightly taller than agents). */
+const BOSS_SPRITE_HEIGHT = 145;
 
 // State colors for the boss (kept for reference, not currently used)
 const _STATE_COLORS: Record<BossState, number> = {
@@ -199,8 +205,8 @@ function BossSpriteComponent({
   keyboardTexture,
   monitorTexture,
   phoneTexture: _phoneTexture,
-  headsetTexture,
-  sunglassesTexture,
+  headsetTexture: _headsetTexture,
+  sunglassesTexture: _sunglassesTexture,
   renderBubble = true,
   isTyping = false,
   isAway = false,
@@ -255,55 +261,62 @@ function BossSpriteComponent({
 
   const bubbleOffset = -80;
 
+  // W17ant cast sprite for the boss; null → legacy fallback rendering
+  const bossTexture = useCastTexture(BOSS_SLUG, "front-right");
+  const useCastRendering = bossTexture !== null;
+
   return (
     <pixiContainer x={position.x} y={position.y}>
-      {/* Chair - behind everything */}
-      {chairTexture ? (
-        <pixiSprite
-          texture={chairTexture}
-          anchor={0.5}
-          x={5}
-          y={30}
-          scale={0.1386}
-        />
-      ) : (
-        <pixiGraphics draw={drawFallbackChair} />
-      )}
+      {/* Chair - behind everything (fallback mode only; DM art has chairs) */}
+      {!useCastRendering &&
+        (chairTexture ? (
+          <pixiSprite
+            texture={chairTexture}
+            anchor={0.5}
+            x={5}
+            y={30}
+            scale={0.1386}
+          />
+        ) : (
+          <pixiGraphics draw={drawFallbackChair} />
+        ))}
 
       {/* Boss character (body + accessories) - hidden when away from desk */}
       {!isAway && (
         <pixiContainer y={6}>
-          {/* Boss body - in front of chair, behind desk */}
-          <pixiGraphics draw={drawBossCallback} />
-
-          {/* Sunglasses - boss always looks cool (drawn before arms) */}
-          {sunglassesTexture && (
+          {/* W17ant cast sprite (feet at boss spot) or fallback capsule */}
+          {bossTexture ? (
             <pixiSprite
-              texture={sunglassesTexture}
-              anchor={0.5}
+              texture={bossTexture}
+              anchor={{ x: 0.5, y: 1 }}
               x={0}
-              y={-19}
-              scale={{ x: 0.036, y: 0.04 }}
-              tint={0x000000}
+              y={BOSS_SPRITE_HEIGHT / 2}
+              height={BOSS_SPRITE_HEIGHT}
+              width={
+                bossTexture.width * (BOSS_SPRITE_HEIGHT / bossTexture.height)
+              }
             />
+          ) : (
+            <pixiGraphics draw={drawBossCallback} />
           )}
         </pixiContainer>
       )}
 
-      {/* Desk surface - in front of boss */}
-      {deskTexture ? (
-        <pixiSprite
-          texture={deskTexture}
-          anchor={{ x: 0.5, y: 0 }}
-          y={30}
-          scale={0.105}
-        />
-      ) : (
-        <pixiGraphics draw={drawFallbackDesk} />
-      )}
+      {/* Desk surface - in front of boss (fallback mode only) */}
+      {!useCastRendering &&
+        (deskTexture ? (
+          <pixiSprite
+            texture={deskTexture}
+            anchor={{ x: 0.5, y: 0 }}
+            y={30}
+            scale={0.105}
+          />
+        ) : (
+          <pixiGraphics draw={drawFallbackDesk} />
+        ))}
 
-      {/* Keyboard - on desk surface */}
-      {keyboardTexture && (
+      {/* Keyboard - on desk surface (fallback mode only) */}
+      {!useCastRendering && keyboardTexture && (
         <pixiSprite
           texture={keyboardTexture}
           anchor={0.5}
@@ -313,27 +326,16 @@ function BossSpriteComponent({
         />
       )}
 
-      {/* Arms - hidden when away from desk */}
-      {!isAway && (
+      {/* Arms - hidden when away from desk (fallback mode only) */}
+      {!isAway && !useCastRendering && (
         <pixiContainer y={6}>
           <pixiGraphics draw={drawRightArmCallback} />
           <pixiGraphics draw={drawLeftArmCallback} />
         </pixiContainer>
       )}
 
-      {/* Headset - hidden when away from desk */}
-      {!isAway && headsetTexture && (
-        <pixiSprite
-          texture={headsetTexture}
-          anchor={0.5}
-          x={0}
-          y={6 - 20}
-          scale={{ x: 0.66825, y: 0.675 }}
-        />
-      )}
-
-      {/* Monitor - left side of desk */}
-      {monitorTexture && (
+      {/* Monitor - left side of desk (fallback mode only) */}
+      {!useCastRendering && monitorTexture && (
         <pixiSprite
           texture={monitorTexture}
           anchor={0.5}
@@ -347,7 +349,7 @@ function BossSpriteComponent({
       {!isAway && (
         <pixiContainer y={-63} scale={0.5}>
           <pixiText
-            text="Claude"
+            text="Michael Scott"
             anchor={0.5}
             style={{
               fontFamily: "monospace",
@@ -397,8 +399,6 @@ function MobileBossComponent({
   position,
   jumpOffset = 0,
   scale = 1.0,
-  sunglassesTexture,
-  headsetTexture,
 }: MobileBossProps): ReactNode {
   const drawBossCallback = useMemo(
     () => (g: Graphics) => drawBossBody(g, "working"),
@@ -410,33 +410,10 @@ function MobileBossComponent({
       {/* Boss body */}
       <pixiGraphics draw={drawBossCallback} />
 
-      {/* Sunglasses */}
-      {sunglassesTexture && (
-        <pixiSprite
-          texture={sunglassesTexture}
-          anchor={0.5}
-          x={0}
-          y={-19}
-          scale={{ x: 0.036, y: 0.04 }}
-          tint={0x000000}
-        />
-      )}
-
-      {/* Headset */}
-      {headsetTexture && (
-        <pixiSprite
-          texture={headsetTexture}
-          anchor={0.5}
-          x={0}
-          y={-20}
-          scale={{ x: 0.66825, y: 0.675 }}
-        />
-      )}
-
       {/* Boss label */}
       <pixiContainer y={-63} scale={0.5}>
         <pixiText
-          text="Claude"
+          text="Michael Scott"
           anchor={0.5}
           style={{
             fontFamily: "monospace",

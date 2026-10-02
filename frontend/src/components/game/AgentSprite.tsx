@@ -1,13 +1,15 @@
 /**
  * AgentSprite Component
  *
- * Renders a single agent character as a colored capsule with optional bubble.
- * Supports headset and sunglasses accessories.
+ * W17ant Office cast rendering (issue 212): each agent is drawn as a real
+ * Office character sprite facing its movement direction, falling back to the
+ * legacy colored capsule while textures load or if a sprite is missing.
+ * Bubble/label/headset layers unchanged.
  */
 
 "use client";
 
-import { memo, useMemo, useState, useCallback, type ReactNode } from "react";
+import { memo, useMemo, useState, useCallback, useRef, type ReactNode } from "react";
 import { useTick } from "@pixi/react";
 import { Graphics, TextStyle, Texture } from "pixi.js";
 import type { Position, BubbleContent } from "@/types";
@@ -19,6 +21,12 @@ import { ICON_MAP } from "./shared/iconMap";
 import { drawBubble, drawIconBadge } from "./shared/drawBubble";
 import { drawRightArm, drawLeftArm } from "./shared/drawArm";
 import { truncateBubbleText } from "@/utils/bubbleText";
+import { useCastTexture } from "@/hooks/useCastTexture";
+import {
+  getCastForAgent,
+  getFacingFromDelta,
+  type OfficeFacing,
+} from "@/themes/w17ant-cast";
 
 // ============================================================================
 // TYPES
@@ -46,6 +54,9 @@ export interface AgentSpriteProps {
 const AGENT_WIDTH = 48; // 1.5 blocks × 32px (matches boss)
 const AGENT_HEIGHT = 80; // 2.5 blocks × 32px (matches boss)
 const STROKE_WIDTH = 4;
+
+/** Cast sprite display height on the canvas (W17ant ratio-preserving). */
+const CAST_SPRITE_HEIGHT = 133;
 
 // ============================================================================
 // DRAWING FUNCTIONS
@@ -175,7 +186,7 @@ function AgentSpriteComponent({
   phase: _phase,
   bubble,
   headsetTexture: _headsetTexture,
-  sunglassesTexture,
+  sunglassesTexture: _sunglassesTexture,
   renderBubble = true,
   renderLabel = true,
   isTyping: _isTyping = false,
@@ -183,7 +194,34 @@ function AgentSpriteComponent({
   const clickToFocusEnabled = usePreferencesStore((s) => s.clickToFocusEnabled);
   const openFocusPopup = useAttentionStore((s) => s.openFocusPopup);
 
-  // Memoize draw callback
+  // ---- W17ant cast selection -------------------------------------------
+  const slug = getCastForAgent(id);
+
+  // Facing from movement. The animation loop moves agents between renders, so
+  // the direction must be derived from the render-phase position delta — the
+  // same pattern W17ant's Character.tsx uses (refs read/updated during render
+  // by design; a one-frame-late effect update makes sprites face the wrong way
+  // while walking). eslint-disable is deliberate and scoped to this block.
+   
+  const prevPosRef = useRef(position);
+   
+  const facingRef = useRef<OfficeFacing>("front-right");
+  // eslint-disable-next-line react-hooks/refs
+  const dx = position.x - prevPosRef.current.x;
+  // eslint-disable-next-line react-hooks/refs
+  const dy = position.y - prevPosRef.current.y;
+  if (Math.abs(dx) + Math.abs(dy) > 0.01) {
+    // eslint-disable-next-line react-hooks/refs
+    facingRef.current = getFacingFromDelta(dx, dy);
+  }
+  // eslint-disable-next-line react-hooks/refs
+  prevPosRef.current = position;
+  // eslint-disable-next-line react-hooks/refs
+  const facing = facingRef.current;
+
+  const castTexture = useCastTexture(slug, facing);
+
+  // Memoize draw callback (legacy capsule fallback)
   const drawCallback = useMemo(
     () => (g: Graphics) => drawAgent(g, color),
     [color],
@@ -204,6 +242,8 @@ function AgentSpriteComponent({
   // Bubble offset for capsule rendering
   const bubbleOffset = -93;
 
+  // Sprite is anchored bottom-center at the agent's feet (same origin as the
+  // capsule's bottom-circle-center), so desk-spot positions stay valid.
   return (
     <pixiContainer
       x={position.x}
@@ -211,23 +251,23 @@ function AgentSpriteComponent({
       onPointerTap={handlePointerTap}
       interactive={clickToFocusEnabled}
     >
-      {/* Agent capsule body */}
-      <pixiGraphics draw={drawCallback} />
-
-      {/* Sunglasses */}
-      {sunglassesTexture && (
+      {/* W17ant Office cast sprite (fallback: legacy capsule) */}
+      {castTexture ? (
         <pixiSprite
-          texture={sunglassesTexture}
-          anchor={0.5}
+          texture={castTexture}
+          anchor={{ x: 0.5, y: 1 }}
           x={0}
-          y={-37}
-          scale={{ x: 0.036, y: 0.04 }}
+          y={0}
+          height={CAST_SPRITE_HEIGHT}
+          width={castTexture.width * (CAST_SPRITE_HEIGHT / castTexture.height)}
         />
+      ) : (
+        <pixiGraphics draw={drawCallback} />
       )}
 
       {/* Agent name if present - hide when in elevator or when renderLabel is false */}
       {renderLabel && name && !isInElevatorZone(position) && (
-        <pixiContainer y={-70} scale={0.5}>
+        <pixiContainer y={-CAST_SPRITE_HEIGHT - 8} scale={0.5}>
           <pixiText
             text={name}
             anchor={0.5}
@@ -369,7 +409,7 @@ function AgentLabelComponent({ name, position }: AgentLabelProps): ReactNode {
 
 export const AgentLabel = memo(AgentLabelComponent);
 
-export const AgentSprite = memo(AgentSpriteComponent);
-
-// Export Bubble component for use in top-level bubbles layer
+// Re-export Bubble (used by OfficeGame's top-level bubbles layer)
 export { Bubble };
+
+export const AgentSprite = memo(AgentSpriteComponent);

@@ -96,6 +96,8 @@ import {
 import { ZoomControls } from "./ZoomControls";
 import { LoadingScreen } from "./LoadingScreen";
 import { OfficeBackground } from "./OfficeBackground";
+import { AmbientStaff } from "./AmbientStaff";
+import { W17ANT_CAST_MODE } from "@/themes/w17ant-cast";
 
 // Register PixiJS components
 extend({ Container, Text, Graphics, Sprite });
@@ -183,6 +185,9 @@ export function OfficeGame(): ReactNode {
   const appRef = useRef<PixiApplication | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const transformRef = useRef<ReactZoomPanPinchRef>(null);
+
+  // Keep the floor populated when nothing is connected (issue 212)
+  // Ambient cast renders itself (render-only, Sol-approved); nothing to call here.
 
   // HMR version for forcing remount
   const hmrVersion = getHmrVersion();
@@ -361,8 +366,8 @@ export function OfficeGame(): ReactNode {
                   {/* Floor and walls */}
                   <OfficeBackground floorTileTexture={textures.floorTile} />
 
-                  {/* Boss area rug - rendered right after floor */}
-                  {textures.bossRug && (
+                  {/* Boss area rug (legacy theme) - rendered right after floor */}
+                  {!W17ANT_CAST_MODE && textures.bossRug && (
                     <pixiSprite
                       texture={textures.bossRug}
                       anchor={0.5}
@@ -372,88 +377,92 @@ export function OfficeGame(): ReactNode {
                     />
                   )}
 
-                  {/* Wall decorations */}
-                  <pixiContainer
-                    x={EMPLOYEE_OF_MONTH_POSITION.x}
-                    y={EMPLOYEE_OF_MONTH_POSITION.y}
-                  >
-                    <EmployeeOfTheMonth />
-                  </pixiContainer>
-                  <pixiContainer
-                    x={CITY_WINDOW_POSITION.x}
-                    y={CITY_WINDOW_POSITION.y}
-                  >
-                    <CityWindow />
-                  </pixiContainer>
-                  <pixiContainer
-                    x={SAFETY_SIGN_POSITION.x}
-                    y={SAFETY_SIGN_POSITION.y}
-                  >
-                    <SafetySign />
-                  </pixiContainer>
-                  <pixiContainer
-                    x={WALL_CLOCK_POSITION.x}
-                    y={WALL_CLOCK_POSITION.y}
-                  >
-                    <WallClock />
-                  </pixiContainer>
-                  {/* Wall outlet below clock */}
-                  {textures.wallOutlet && (
-                    <pixiSprite
-                      texture={textures.wallOutlet}
-                      anchor={0.5}
-                      x={WALL_OUTLET_POSITION.x}
-                      y={WALL_OUTLET_POSITION.y}
-                      scale={0.04}
-                    />
-                  )}
-                  <pixiContainer
-                    x={WHITEBOARD_POSITION.x}
-                    y={WHITEBOARD_POSITION.y}
-                  >
-                    <Whiteboard todos={todos} />
-                  </pixiContainer>
-                  {textures.waterCooler && (
-                    <pixiSprite
-                      texture={textures.waterCooler}
-                      anchor={0.5}
-                      x={WATER_COOLER_POSITION.x}
-                      y={WATER_COOLER_POSITION.y}
-                      scale={0.198}
-                    />
-                  )}
-                  {/* Coffee machine - to the right of water cooler */}
-                  {textures.coffeeMachine && (
-                    <pixiSprite
-                      texture={textures.coffeeMachine}
-                      anchor={0.5}
-                      x={COFFEE_MACHINE_POSITION.x}
-                      y={COFFEE_MACHINE_POSITION.y}
-                      scale={0.1}
-                    />
-                  )}
+                  {/* Wall decorations (legacy theme; hidden under DM room art) */}
+                  {W17ANT_CAST_MODE ? null : (
+                    <>
+                      <pixiContainer
+                        x={EMPLOYEE_OF_MONTH_POSITION.x}
+                        y={EMPLOYEE_OF_MONTH_POSITION.y}
+                      >
+                        <EmployeeOfTheMonth />
+                      </pixiContainer>
+                      <pixiContainer
+                        x={CITY_WINDOW_POSITION.x}
+                        y={CITY_WINDOW_POSITION.y}
+                      >
+                        <CityWindow />
+                      </pixiContainer>
+                      <pixiContainer
+                        x={SAFETY_SIGN_POSITION.x}
+                        y={SAFETY_SIGN_POSITION.y}
+                      >
+                        <SafetySign />
+                      </pixiContainer>
+                      <pixiContainer
+                        x={WALL_CLOCK_POSITION.x}
+                        y={WALL_CLOCK_POSITION.y}
+                      >
+                        <WallClock />
+                      </pixiContainer>
+                      {/* Wall outlet below clock */}
+                      {textures.wallOutlet && (
+                        <pixiSprite
+                          texture={textures.wallOutlet}
+                          anchor={0.5}
+                          x={WALL_OUTLET_POSITION.x}
+                          y={WALL_OUTLET_POSITION.y}
+                          scale={0.04}
+                        />
+                      )}
+                      <pixiContainer
+                        x={WHITEBOARD_POSITION.x}
+                        y={WHITEBOARD_POSITION.y}
+                      >
+                        <Whiteboard todos={todos} />
+                      </pixiContainer>
+                      {textures.waterCooler && (
+                        <pixiSprite
+                          texture={textures.waterCooler}
+                          anchor={0.5}
+                          x={WATER_COOLER_POSITION.x}
+                          y={WATER_COOLER_POSITION.y}
+                          scale={0.198}
+                        />
+                      )}
+                      {/* Coffee machine - to the right of water cooler */}
+                      {textures.coffeeMachine && (
+                        <pixiSprite
+                          texture={textures.coffeeMachine}
+                          anchor={0.5}
+                          x={COFFEE_MACHINE_POSITION.x}
+                          y={COFFEE_MACHINE_POSITION.y}
+                          scale={0.1}
+                        />
+                      )}
 
-                  {/* Printer station - bottom left corner */}
-                  {/* Only print after boss delivers the completion message */}
-                  <PrinterStation
-                    x={PRINTER_STATION_POSITION.x}
-                    y={PRINTER_STATION_POSITION.y}
-                    isPrinting={
-                      printReport && !isCompacting && !!boss.bubble.content
-                    }
-                    deskTexture={textures.desk}
-                    printerTexture={textures.printer}
-                  />
+                      {/* Printer station - bottom left corner */}
+                      {/* Only print after boss delivers the completion message */}
+                      <PrinterStation
+                        x={PRINTER_STATION_POSITION.x}
+                        y={PRINTER_STATION_POSITION.y}
+                        isPrinting={
+                          printReport && !isCompacting && !!boss.bubble.content
+                        }
+                        deskTexture={textures.desk}
+                        printerTexture={textures.printer}
+                      />
 
-                  {/* Plant - to the right of printer */}
-                  {textures.plant && (
-                    <pixiSprite
-                      texture={textures.plant}
-                      anchor={0.5}
-                      x={PLANT_POSITION.x}
-                      y={PLANT_POSITION.y}
-                      scale={0.1}
-                    />
+                      {/* Plant - to the right of printer */}
+                      {textures.plant && (
+                        <pixiSprite
+                          texture={textures.plant}
+                          anchor={0.5}
+                          x={PLANT_POSITION.x}
+                          y={PLANT_POSITION.y}
+                          scale={0.1}
+                        />
+                      )}
+                    </>
                   )}
 
                   {/* Elevator with animated doors and agents inside */}
@@ -476,28 +485,29 @@ export function OfficeGame(): ReactNode {
 
                   {/* Y-sorted layer: chairs and agents sorted by Y position (higher Y = in front) */}
                   <pixiContainer sortableChildren={true}>
-                    {/* Desk chairs - zIndex based on chair seat back */}
-                    {deskPositions.map((desk, i) => {
-                      const chairZIndex = desk.y + 20;
-                      return (
-                        <pixiContainer
-                          key={`chair-${i}`}
-                          x={desk.x}
-                          y={desk.y}
-                          zIndex={chairZIndex}
-                        >
-                          {textures.chair && (
-                            <pixiSprite
-                              texture={textures.chair}
-                              anchor={0.5}
-                              x={0}
-                              y={30}
-                              scale={0.1386}
-                            />
-                          )}
-                        </pixiContainer>
-                      );
-                    })}
+                    {/* Desk chairs (legacy theme; the DM art has its own desks) */}
+                    {!W17ANT_CAST_MODE &&
+                      deskPositions.map((desk, i) => {
+                        const chairZIndex = desk.y + 20;
+                        return (
+                          <pixiContainer
+                            key={`chair-${i}`}
+                            x={desk.x}
+                            y={desk.y}
+                            zIndex={chairZIndex}
+                          >
+                            {textures.chair && (
+                              <pixiSprite
+                                texture={textures.chair}
+                                anchor={0.5}
+                                x={0}
+                                y={30}
+                                scale={0.1386}
+                              />
+                            )}
+                          </pixiContainer>
+                        );
+                      })}
 
                     {/* Agents outside elevator - zIndex based on feet Y position */}
                     {Array.from(agents.values())
@@ -529,29 +539,34 @@ export function OfficeGame(): ReactNode {
                           />
                         </pixiContainer>
                       ))}
-                  </pixiContainer>
-
-                  {/* Desk surfaces and keyboards (behind agent arms) */}
-                  <DeskSurfacesBase
-                    deskCount={deskCount}
-                    occupiedDesks={occupiedDesks}
-                    deskTexture={textures.desk}
-                    keyboardTexture={textures.keyboard}
-                  />
+                    {/* Ambient Office cast when no real agents exist (render-only) */}
+                    <AmbientStaff />
+                  </pixiContainer>                  {/* Desk surfaces and keyboards (legacy theme; DM art has its own) */}
+                  {!W17ANT_CAST_MODE && (
+                    <DeskSurfacesBase
+                      deskCount={deskCount}
+                      occupiedDesks={occupiedDesks}
+                      deskTexture={textures.desk}
+                      keyboardTexture={textures.keyboard}
+                    />
+                  )}
 
                   {/* Agent arms - rendered after desk/keyboard, before headsets */}
-                  {Array.from(agents.values())
-                    .filter((agent) => agent.phase === "idle")
-                    .map((agent) => (
-                      <AgentArms
-                        key={`arms-${agent.id}`}
-                        position={agent.currentPosition}
-                        isTyping={agent.isTyping}
-                      />
-                    ))}
+                  {/* Hidden under the DM art: cast sprites already include arms */}
+                  {!W17ANT_CAST_MODE &&
+                    Array.from(agents.values())
+                      .filter((agent) => agent.phase === "idle")
+                      .map((agent) => (
+                        <AgentArms
+                          key={`arms-${agent.id}`}
+                          position={agent.currentPosition}
+                          isTyping={agent.isTyping}
+                        />
+                      ))}
 
-                  {/* Agent headsets - rendered after arms so they appear on top */}
-                  {textures.headset &&
+                  {/* Agent headsets (legacy theme; cast sprites have their own) */}
+                  {!W17ANT_CAST_MODE &&
+                    textures.headset &&
                     Array.from(agents.values())
                       .filter((agent) => agent.phase === "idle")
                       .map((agent) => (
@@ -562,21 +577,23 @@ export function OfficeGame(): ReactNode {
                         />
                       ))}
 
-                  {/* Monitors and decorations (in front of agent arms) */}
-                  <DeskSurfacesTop
-                    deskCount={deskCount}
-                    occupiedDesks={occupiedDesks}
-                    deskTasks={deskTasks}
-                    monitorTexture={textures.monitor}
-                    coffeeMugTexture={textures.coffeeMug}
-                    staplerTexture={textures.stapler}
-                    deskLampTexture={textures.deskLamp}
-                    penHolderTexture={textures.penHolder}
-                    magic8BallTexture={textures.magic8Ball}
-                    rubiksCubeTexture={textures.rubiksCube}
-                    rubberDuckTexture={textures.rubberDuck}
-                    thermosTexture={textures.thermos}
-                  />
+                  {/* Monitors and decorations (legacy theme; DM art has its own) */}
+                  {!W17ANT_CAST_MODE && (
+                    <DeskSurfacesTop
+                      deskCount={deskCount}
+                      occupiedDesks={occupiedDesks}
+                      deskTasks={deskTasks}
+                      monitorTexture={textures.monitor}
+                      coffeeMugTexture={textures.coffeeMug}
+                      staplerTexture={textures.stapler}
+                      deskLampTexture={textures.deskLamp}
+                      penHolderTexture={textures.penHolder}
+                      magic8BallTexture={textures.magic8Ball}
+                      rubiksCubeTexture={textures.rubiksCube}
+                      rubberDuckTexture={textures.rubberDuck}
+                      thermosTexture={textures.thermos}
+                    />
+                  )}
 
                   {/* Boss */}
                   <BossSprite
@@ -603,15 +620,15 @@ export function OfficeGame(): ReactNode {
                       position={compactionAnimation.bossPosition}
                       jumpOffset={compactionAnimation.jumpOffset}
                       scale={compactionAnimation.bossScale}
-                      sunglassesTexture={textures.sunglasses}
-                      headsetTexture={textures.headset}
+                      sunglassesTexture={null}
+                      headsetTexture={null}
                     />
                   )}
 
-                  {/* Trash Can (Context Utilization Indicator) - right of boss desk */}
+                  {/* Trash Can (Context Utilization Indicator) - follows boss desk */}
                   <TrashCanSprite
-                    x={boss.position.x + TRASH_CAN_OFFSET.x}
-                    y={boss.position.y + TRASH_CAN_OFFSET.y}
+                    x={boss.position.x + TRASH_CAN_OFFSET.x * 0.4}
+                    y={boss.position.y + TRASH_CAN_OFFSET.y * 0.4}
                     contextUtilization={
                       compactionAnimation.phase !== "idle"
                         ? compactionAnimation.animatedContextUtilization
