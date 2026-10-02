@@ -333,12 +333,18 @@ class EventProcessor:
                     orchestrator.remove_session(session_id)
                     if orchestrator.is_empty:
                         del self.orchestrators[sm.room_id]
+            from app.core.room_orchestrator import OFFICE_ROOM_ID
+
+            office = self.orchestrators.get(OFFICE_ROOM_ID)
+            if office is not None:
+                office.remove_session(session_id)
             self.sessions.pop(session_id, None)
 
     async def clear_all_sessions(self) -> None:
         """Clear all in-memory session state."""
         async with self._sessions_lock:
             self.sessions.clear()
+            self.orchestrators.clear()
 
     async def evict_idle_sessions(self, max_idle_seconds: float) -> int:
         """Drop in-memory StateMachines idle longer than ``max_idle_seconds``.
@@ -654,6 +660,27 @@ class EventProcessor:
                 self.orchestrators[sm.room_id] = orchestrator
             orchestrator.update_session(event.session_id, sm)
             await broadcast_room_state(sm.room_id, orchestrator)
+
+        # ------------------------------------------------------------------
+        # Merged office floor (issue 221, operator directive 2026-10-02):
+        # every real session/agent renders in ONE office, independent of its
+        # departmental room. Presentation membership only — room attribution
+        # above stays truthful.
+        # ------------------------------------------------------------------
+        from app.core.room_orchestrator import OFFICE_ROOM_ID
+
+        office = self.orchestrators.get(OFFICE_ROOM_ID)
+        if office is None:
+            office = RoomOrchestrator(OFFICE_ROOM_ID)
+            self.orchestrators[OFFICE_ROOM_ID] = office
+        office.update_session(event.session_id, sm)
+        # Throttle the whole-floor merge: it walks every session, and tool
+        # events can arrive many times per second. State on connect is sent
+        # fresh by the room WebSocket, so ~1 Hz is enough on the wire.
+        office_now = datetime.now(UTC).timestamp()
+        if office_now - getattr(self, "_office_broadcast_at", 0.0) >= 0.75:
+            self._office_broadcast_at = office_now
+            await broadcast_room_state(OFFICE_ROOM_ID, office)
 
         # ------------------------------------------------------------------
         # Post-broadcast async enrichment (single dispatch).

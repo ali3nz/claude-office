@@ -20,6 +20,12 @@ export interface WebSocketControllerOptions {
   enabled: boolean;
   /** Base URL for the WebSocket (controller appends `/ws/${sessionId}`). */
   baseUrl: string;
+  /**
+   * When set, the controller connects to the merged ROOM feed
+   * (`/ws/room/${roomId}`) instead of a single session stream. Issue 221:
+   * the office is one floor for every real agent.
+   */
+  roomId?: string;
   /** Receives every `MessageEvent` on the current connection. */
   onMessage: (event: MessageEvent) => void;
   /** Invoked from `onopen` to clear stale tracking state (processed agents, bubbles, spawn index). */
@@ -58,7 +64,7 @@ export class WebSocketController {
    * same session-id guards as the original inlined implementation.
    */
   connect(): void {
-    const { sessionId, enabled, baseUrl, isReplaying } = this.opts;
+    const { sessionId, enabled, baseUrl, roomId, isReplaying } = this.opts;
     if (!sessionId || isReplaying()) return;
 
     // Increment connection id to invalidate any pending onclose handlers.
@@ -77,7 +83,9 @@ export class WebSocketController {
       this.reconnectTimeout = null;
     }
 
-    const ws = new WebSocket(`${baseUrl}/ws/${sessionId}`);
+    const ws = new WebSocket(
+      roomId ? `${baseUrl}/ws/room/${roomId}` : `${baseUrl}/ws/${sessionId}`,
+    );
     this.ws = ws;
 
     ws.onopen = () => {

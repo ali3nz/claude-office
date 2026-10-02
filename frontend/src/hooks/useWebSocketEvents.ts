@@ -33,6 +33,8 @@ import type { EventType, WebSocketMessage } from "@/types";
 interface UseWebSocketEventsOptions {
   sessionId: string;
   enabled?: boolean;
+  /** Connect to the merged room feed instead of one session (issue 221). */
+  roomId?: string;
 }
 
 // ============================================================================
@@ -42,6 +44,7 @@ interface UseWebSocketEventsOptions {
 export function useWebSocketEvents({
   sessionId,
   enabled = true,
+  roomId,
 }: UseWebSocketEventsOptions): void {
   // ---- Domain-tracking refs (read/written by reconcileState) ----
   const processedAgentsRef = useRef<Set<string>>(new Set());
@@ -210,6 +213,7 @@ export function useWebSocketEvents({
     controllerRef.current = new WebSocketController({
       sessionId,
       enabled,
+      roomId,
       baseUrl,
       onMessage: handleMessage,
       onReconnectReset: handleReconnectReset,

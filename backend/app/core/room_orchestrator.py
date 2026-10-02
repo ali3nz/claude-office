@@ -10,6 +10,7 @@ merged kanban board.
 from __future__ import annotations
 
 import logging
+import re
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
@@ -25,6 +26,31 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 # Colors assigned to teammates in order of arrival (index 0 = first teammate)
+# Single merged office floor (issue 221, operator directive 2026-10-02):
+# every real session/agent is rendered in ONE office. Desk allocation is
+# deterministic (insertion order) and capped at the W17ant workstation count;
+# overflow stays in the sidebar but off the floor (no wrap, no collisions).
+OFFICE_ROOM_ID = "office"
+OFFICE_MAX_SEATED = 10  # number of W17ant workstations on the DM floor
+
+_RUN_ID_RE = re.compile(r"^orch-(\d{1,4})-([a-z]+)")
+
+
+def office_session_name(session_id: str) -> str:
+    """Deterministic, human-readable floor name for an agent-less session."""
+    sid = str(session_id or "")
+    if "agentchat-sol-dockerhost" in sid:
+        return "Sol Docker"
+    if "agentchat-sol-webserver" in sid:
+        return "Sol Webserver"
+    m = _RUN_ID_RE.match(sid)
+    if m:
+        return f"Run {m.group(1)} {m.group(2).title()}"[:24]
+    if sid.startswith("oc-"):
+        return "OpenChamber " + sid[-4:]
+    return sid[:16] or "Agent"
+
+
 _TEAMMATE_COLORS = [
     "#3b82f6",  # blue
     "#22c55e",  # green
@@ -101,6 +127,7 @@ class RoomOrchestrator:
 
     def __init__(self, room_id: str) -> None:
         self.room_id = room_id
+        self.is_office = room_id == OFFICE_ROOM_ID
         self._sessions: dict[str, _SessionEntry] = {}
 
     # ------------------------------------------------------------------
@@ -110,8 +137,13 @@ class RoomOrchestrator:
     def add_session(self, session_id: str, sm: StateMachine) -> None:
         """Register a session. Call once when session first joins this room."""
         # Team session: lead has no teammate_name, or is explicitly flagged.
-        # No team context -> solo session, always the lead.
-        is_lead = sm.is_lead or sm.teammate_name is None if sm.team_name else True
+        # No team context -> solo session, always the lead. On the merged office
+        # floor the FIRST session owns the boss; every other session becomes a
+        # visible character (deterministic, insertion order).
+        if self.is_office:
+            is_lead = len(self._sessions) == 0
+        else:
+            is_lead = sm.is_lead or sm.teammate_name is None if sm.team_name else True
 
         color = "#f59e0b" if is_lead else self._next_teammate_color()
 
@@ -150,6 +182,9 @@ class RoomOrchestrator:
         """Return a merged GameState from all sessions, or None if empty."""
         if not self._sessions:
             return None
+        if self.is_office:
+            # The office floor must render even with a single session.
+            return self._merge_office()
 
         lead_entry = self._lead_entry()
         if lead_entry is None:
@@ -161,6 +196,87 @@ class RoomOrchestrator:
             return lead_state
 
         return self._merge_team(lead_entry, lead_state)
+
+    # ------------------------------------------------------------------
+    # Merged office floor (issue 221, operator directive)
+    # ------------------------------------------------------------------
+
+    def _merge_office(self) -> GameState | None:
+        """One floor for every real session/agent, deterministically seated.
+
+        Every session's agents become characters (their real names/states).
+        Sessions with no agents contribute one session-level character. The
+        first OFFICE_MAX_SEATED characters get workstations 1..N; overflow is
+        dropped from the floor (still present in the sidebar). No wrapping, no
+        two characters on one workstation.
+        """
+        first_entry = next(iter(self._sessions.values()))
+        first_state = first_entry.sm.to_game_state(first_entry.session_id)
+
+        merged_agents: list[Agent] = []
+        seated = 0
+        for session_id, entry in self._sessions.items():
+            if seated >= OFFICE_MAX_SEATED:
+                break
+            state = entry.sm.to_game_state(session_id)
+            session_agents = list(state.agents)
+            if session_agents:
+                for agent in session_agents:
+                    if seated >= OFFICE_MAX_SEATED:
+                        break
+                    seated += 1
+                    merged_agents.append(
+                        agent.model_copy(
+                            update={
+                                "character_type": "teammate",
+                                "parent_session_id": session_id,
+                                "number": seated,
+                                "desk": seated,
+                            }
+                        )
+                    )
+            else:
+                seated += 1
+                merged_agents.append(
+                    Agent(
+                        id=f"off-{session_id[:10]}",
+                        name=office_session_name(session_id),
+                        color=_TEAMMATE_COLORS[(seated - 1) % len(_TEAMMATE_COLORS)],
+                        number=seated,
+                        state=_BOSS_TO_AGENT.get(
+                            state.boss.state, AgentState.WORKING
+                        ),
+                        desk=seated,
+                        bubble=state.boss.bubble,
+                        current_task=state.boss.current_task,
+                        character_type="teammate",
+                        parent_session_id=session_id,
+                    )
+                )
+
+        desk_count = max(8, len(merged_agents) + 2)
+        return GameState(
+            session_id=first_entry.session_id,
+            floor_id=first_entry.sm.floor_id,
+            room_id=OFFICE_ROOM_ID,
+            boss=first_state.boss,
+            agents=merged_agents,
+            office=OfficeState(
+                desk_count=desk_count,
+                elevator_state=first_state.office.elevator_state,
+                phone_state=first_state.office.phone_state,
+                context_utilization=first_state.office.context_utilization,
+                tool_uses_since_compaction=first_state.office.tool_uses_since_compaction,
+                print_report=first_state.office.print_report,
+            ),
+            last_updated=datetime.now(UTC),
+            history=first_state.history,
+            todos=first_state.todos,
+            arrival_queue=first_state.arrival_queue,
+            departure_queue=first_state.departure_queue,
+            whiteboard_data=first_state.whiteboard_data,
+            conversation=first_state.conversation,
+        )
 
     # ------------------------------------------------------------------
     # Internal helpers

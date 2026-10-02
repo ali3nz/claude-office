@@ -197,7 +197,7 @@ export default function V2TestPage(): React.ReactNode {
   // ------------------------------------------------------------------
   // WebSocket connection — reconnects when sessionId changes
   // ------------------------------------------------------------------
-  useWebSocketEvents({ sessionId });
+  useWebSocketEvents({ sessionId, roomId: "office" });
 
   // ------------------------------------------------------------------
   // One-time initialization effects
