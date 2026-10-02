@@ -105,6 +105,12 @@ import {
 } from "./RenderStatus";
 import { W17ANT_CAST_MODE } from "@/themes/w17ant-cast";
 
+// Application lifecycle sequencing for the black-floor diagnosis (issue 212,
+// Sol-approved instrumentation only — no behavior change). Module scope so
+// instance ids stay unique across remounts of this component.
+let APP_INSTANCE_SEQ = 0;
+let LC_EVENT_SEQ = 0;
+
 // Register PixiJS components
 extend({ Container, Text, Graphics, Sprite });
 
@@ -221,6 +227,21 @@ export function OfficeGame(): ReactNode {
     errorMessage: null,
   }));
   const [rendererType, setRendererType] = useState<RendererKind>(null);
+  // Lifecycle instrumentation (issue 212 diagnosis only — no behavior change).
+  const [appInstanceId] = useState(() => {
+    APP_INSTANCE_SEQ += 1;
+    return APP_INSTANCE_SEQ;
+  });
+  const [rendererPresent, setRendererPresent] = useState<boolean | null>(null);
+  // Lifecycle event log, newest last (diagnosis only). The mount line is
+  // seeded in the lazy initializer (not an effect) to satisfy
+  // react-hooks/set-state-in-effect.
+  const [lcEvents, setLcEvents] = useState<string[]>(() => {
+    LC_EVENT_SEQ += 1;
+    const line = `#${LC_EVENT_SEQ} app#${appInstanceId} mount`;
+    console.log(`[office-lifecycle] ${line}`);
+    return [line];
+  });
   const buildCommit =
     process.env.NEXT_PUBLIC_CO_COMMIT &&
     process.env.NEXT_PUBLIC_CO_COMMIT !== ""
@@ -237,6 +258,15 @@ export function OfficeGame(): ReactNode {
     wireGameRuntime();
     return () => unwireGameRuntime();
   }, []);
+
+  // Lifecycle: unmount ordering (diagnosis only; mount is seeded above).
+  useEffect(() => {
+    return () => {
+      LC_EVENT_SEQ += 1;
+      const bye = `#${LC_EVENT_SEQ} app#${appInstanceId} unmount`;
+      console.log(`[office-lifecycle] ${bye}`);
+    };
+  }, [appInstanceId]);
 
   // Cleanup on unmount (HMR or navigation)
   useEffect(() => {
@@ -379,6 +409,9 @@ export function OfficeGame(): ReactNode {
             <RenderStatus
               init={renderInit}
               rendererType={rendererType}
+              rendererPresent={rendererPresent}
+              appInstanceId={appInstanceId}
+              lcEvents={lcEvents}
               assets={{
                 spritesLoaded,
                 texturesLoaded,
@@ -398,12 +431,16 @@ export function OfficeGame(): ReactNode {
               }
               onInit={(app) => {
                 appRef.current = app;
-                setRendererType(
-                  normalizeRendererType(
-                    (app as unknown as { renderer?: unknown }).renderer ??
-                      app,
-                  ),
-                );
+                const renderer = (app as unknown as { renderer?: unknown })
+                  .renderer;
+                setRendererPresent(renderer != null);
+                setRendererType(normalizeRendererType(renderer ?? app));
+                LC_EVENT_SEQ += 1;
+                const kind =
+                  renderer != null ? "renderer-present" : "renderer-absent";
+                const line = `#${LC_EVENT_SEQ} app#${appInstanceId} init-resolve ${kind}`;
+                console.log(`[office-lifecycle] ${line}`);
+                setLcEvents((prev) => [...prev.slice(-11), line]);
                 setRenderInit((st) => ({
                   ...st,
                   resolved: true,
