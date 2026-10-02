@@ -262,18 +262,8 @@ function AgentSpriteComponent({
       interactive={clickToFocusEnabled}
     >
       {/* W17ant Office cast sprite (fallback: legacy capsule) */}
-      {castTexture ? (
-        <pixiSprite
-          texture={castTexture}
-          anchor={{ x: 0.5, y: 1 }}
-          x={0}
-          y={0}
-          height={CAST_SPRITE_HEIGHT}
-          width={castTexture.width * (CAST_SPRITE_HEIGHT / castTexture.height)}
-        />
-      ) : (
-        <pixiGraphics draw={drawCallback} />
-      )}
+      {/* TEMP DIAGNOSTIC: force the legacy capsule to test the graphics path */}
+      <pixiGraphics draw={drawCallback} />
 
       {/* Agent name if present - hide when in elevator or when renderLabel is false */}
       {renderLabel && name && !isInElevatorZone(position) && (
