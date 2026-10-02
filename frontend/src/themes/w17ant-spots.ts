@@ -133,6 +133,16 @@ interface RawDesk {
  * The anchor is the sprite's bottom-center (W17ant uses translate(-50%,-100%)),
  * which is also the correct render z (front edge y) for our y-sorted layer.
  */
+/** Break destinations (W17ant main-office activity spots, art -> canvas). */
+export const COFFEE_SPOT: Position = artToCanvas(
+  (73.5 / 100) * ART_WIDTH,
+  (56.7 / 100) * ART_HEIGHT,
+);
+export const WATER_SPOT: Position = artToCanvas(
+  (53.3 / 100) * ART_WIDTH,
+  (46.6 / 100) * ART_HEIGHT,
+);
+
 export const DESKS: DeskFurniture[] = (
   [
     { k: "left-rear", p: [42.4, 50.4] },

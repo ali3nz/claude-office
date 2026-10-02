@@ -20,6 +20,7 @@ import {
   Application as PixiApplication,
 } from "pixi.js";
 import { Component, useMemo, useEffect, useRef, useCallback, type ReactNode } from "react";
+import { useTick } from "@pixi/react";
 import {
   TransformWrapper,
   TransformComponent,
@@ -47,7 +48,8 @@ import { useAnimationSystem } from "@/systems/animationSystem";
 import { wireGameRuntime, unwireGameRuntime } from "@/systems/gameRuntime";
 import { useCompactionAnimation } from "@/systems/compactionAnimation";
 import { useOfficeTextures } from "@/hooks/useOfficeTextures";
-import { getSpotForDesk } from "@/themes/w17ant-spots";
+import { getSpotForDesk, COFFEE_SPOT, WATER_SPOT } from "@/themes/w17ant-spots";
+import { setBehavior, tickBehaviors, getOffset } from "@/systems/officeBehavior";
 import { coMark } from "@/utils/coMark";
 import {
   CANVAS_WIDTH,
@@ -264,6 +266,44 @@ function FloorSign({
   );
 }
 
+// Issue 226 R3/R4: display-only movement group. Reads the behavior engine's
+// current offset for an agent and applies it every frame (no React re-render),
+// so the sprite and its label/bubble stay aligned.
+function BehaviorGroup({
+  id,
+  baseX,
+  baseY,
+  zIndex,
+  children,
+}: {
+  id: string;
+  baseX: number;
+  baseY: number;
+  zIndex?: number;
+  children: ReactNode;
+}): ReactNode {
+  const ref = useRef<Container | null>(null);
+  useTick(() => {
+    const off = getOffset(id);
+    const node = ref.current;
+    if (node) {
+      node.x = baseX + off.x;
+      node.y = baseY + off.y;
+    }
+  });
+  return (
+    <pixiContainer ref={ref} x={baseX} y={baseY} zIndex={zIndex}>
+      {children}
+    </pixiContainer>
+  );
+}
+
+/** Advances the display-only behavior engine once per rendered frame. */
+function BehaviorTicker(): null {
+  useTick((ticker) => tickBehaviors(ticker.deltaMS));
+  return null;
+}
+
 // Office-subtree probe (Sol C-first): distinguishes render from mount.
 function CoTreeProbe(): null {
   coSet("tree_render", "render");
@@ -440,6 +480,45 @@ export function OfficeGame(): ReactNode {
   if (typeof window !== "undefined" && spritesLoaded) coSet("gate_open", "yes");
   if (typeof window !== "undefined" && spritesLoaded) coMark("gate-render");
 
+  // Issue 226 R3/R4: derive each real agent's display behavior from state it
+  // already has (no new authoritative source): consult agents walk to a Sol
+  // gateway character; idle agents take coffee/water breaks; everyone else
+  // stays at their workstation. Presentation only.
+  useEffect(() => {
+    const list = Array.from(agents.values());
+    const sols = list.filter(
+      (a) => a.name === "Sol Docker" || a.name === "Sol Webserver",
+    );
+    const hashId = (id: string) => {
+      let h = 0;
+      for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) | 0;
+      return Math.abs(h);
+    };
+    for (const a of list) {
+      const hay = `${a.name ?? ""} ${a.currentTask ?? ""} ${
+        a.bubble.content?.text ?? ""
+      }`.toLowerCase();
+      const isSol = a.name === "Sol Docker" || a.name === "Sol Webserver";
+      const consulting = !isSol && /consult|\bsol\b/.test(hay) && sols.length > 0;
+      if (consulting) {
+        const sol = sols[hashId(a.id) % sols.length];
+        setBehavior(a.id, {
+          mode: "consult",
+          seat: a.currentPosition,
+          target: { x: sol.currentPosition.x + 30, y: sol.currentPosition.y + 8 },
+        });
+      } else if (!isSol && a.phase === "idle") {
+        setBehavior(a.id, {
+          mode: "break",
+          seat: a.currentPosition,
+          target: hashId(a.id) % 2 === 0 ? COFFEE_SPOT : WATER_SPOT,
+        });
+      } else {
+        setBehavior(a.id, { mode: "seat", seat: a.currentPosition, target: null });
+      }
+    }
+  }, [agents]);
+
   return (
     <div ref={containerRef} className="w-full h-full overflow-hidden relative">
       <TransformWrapper
@@ -510,6 +589,7 @@ export function OfficeGame(): ReactNode {
                 <CoErrorBoundary>
                   <>
                   <CoTreeProbe />
+                  <BehaviorTicker />
                   {/* Floor and walls */}
                   <CoErrorBoundary label="bg">
                     <OfficeBackground floorTileTexture={textures.floorTile} />
@@ -656,8 +736,11 @@ export function OfficeGame(): ReactNode {
                           ),
                       )
                       .map((agent) => (
-                        <pixiContainer
+                        <BehaviorGroup
                           key={agent.id}
+                          id={agent.id}
+                          baseX={agent.currentPosition.x}
+                          baseY={agent.currentPosition.y}
                           zIndex={
                             agent.currentPosition.y +
                             (agent.phase === "idle" ? 60 : 0)
@@ -682,7 +765,7 @@ export function OfficeGame(): ReactNode {
                                 : undefined
                             }
                           />
-                        </pixiContainer>
+                        </BehaviorGroup>
                       ))}
                   </pixiContainer>
                   </CoErrorBoundary>
@@ -794,11 +877,14 @@ export function OfficeGame(): ReactNode {
                         agent.name && !isInElevatorZone(agent.currentPosition),
                     )
                     .map((agent) => (
-                      <AgentLabel
+                      <BehaviorGroup
                         key={`label-${agent.id}`}
-                        name={agent.name!}
-                        position={agent.currentPosition}
-                      />
+                        id={agent.id}
+                        baseX={agent.currentPosition.x}
+                        baseY={agent.currentPosition.y}
+                      >
+                        <AgentLabel name={agent.name!} position={{ x: 0, y: 0 }} />
+                      </BehaviorGroup>
                     ))}
 
                   {/* Character Type Overlays - crown/badge/dot per agent type */}
@@ -877,16 +963,17 @@ export function OfficeGame(): ReactNode {
                         !isInElevatorZone(agent.currentPosition),
                     )
                     .map((agent) => (
-                      <pixiContainer
+                      <BehaviorGroup
                         key={`bubble-${agent.id}`}
-                        x={agent.currentPosition.x}
-                        y={agent.currentPosition.y}
+                        id={agent.id}
+                        baseX={agent.currentPosition.x}
+                        baseY={agent.currentPosition.y}
                       >
                         <AgentBubble
                           content={agent.bubble.content!}
                           yOffset={-80}
                         />
-                      </pixiContainer>
+                      </BehaviorGroup>
                     ))}
                   {/* Boss bubble removed with the boss character (issue 226). */}
                   </>
