@@ -260,25 +260,41 @@ if _SERVE_STATIC and STATIC_DIR.exists():
         # Reject path traversal attempts
         file_path = _safe_static_path(path)
         if file_path is None:
-            return FileResponse(STATIC_DIR / "index.html")
+            return FileResponse(
+                STATIC_DIR / "index.html", headers={"Cache-Control": "no-store"}
+            )
 
         if file_path.is_file():
+            if file_path.suffix.lower() in (".html", ".htm"):
+                return FileResponse(
+                    file_path, headers={"Cache-Control": "no-store"}
+                )
             return FileResponse(file_path)
 
         html_path = _safe_static_path(f"{path}.html")
         if html_path is not None and html_path.is_file():
-            return FileResponse(html_path)
+            return FileResponse(
+                html_path, headers={"Cache-Control": "no-store"}
+            )
 
         index_path = STATIC_DIR / "index.html"
         if index_path.is_file():
-            return FileResponse(index_path)
+            return FileResponse(
+                index_path, headers={"Cache-Control": "no-store"}
+            )
 
         not_found_path = STATIC_DIR / "404.html"
         if not_found_path.is_file():
-            return FileResponse(not_found_path, status_code=404)
+            return FileResponse(
+            not_found_path,
+            status_code=404,
+            headers={"Cache-Control": "no-store"},
+        )
         return FileResponse(index_path)
 
     @app.get("/")
     async def serve_index() -> FileResponse:
         """Serve the index page."""
-        return FileResponse(STATIC_DIR / "index.html")
+        return FileResponse(
+            STATIC_DIR / "index.html", headers={"Cache-Control": "no-store"}
+        )
