@@ -47,6 +47,10 @@ export interface OfficeTextures {
   thermos: Texture | null;
 }
 
+// Bounded readiness fallback (issue 212 black-floor defect, Sol-approved):
+// one permanently-pending Pixi load must never hold the scene forever.
+const TEXTURE_READY_TIMEOUT_MS = 15000;
+
 interface UseOfficeTexturesResult {
   textures: OfficeTextures;
   loaded: boolean;
@@ -117,32 +121,50 @@ export function useOfficeTextures(): UseOfficeTexturesResult {
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    const loadTextures = async () => {
-      try {
-        const keys = Object.keys(TEXTURE_PATHS) as (keyof OfficeTextures)[];
-        const paths = keys.map((key) => TEXTURE_PATHS[key]);
+    let cancelled = false;
+    const keys = Object.keys(TEXTURE_PATHS) as (keyof OfficeTextures)[];
+    const paths = keys.map((key) => TEXTURE_PATHS[key]);
+    const buildMap = (arr: (Texture | null)[]) =>
+      keys.reduce(
+        (acc, key, index) => {
+          acc[key] = arr[index];
+          return acc;
+        },
+        {} as Record<keyof OfficeTextures, Texture | null>,
+      );
 
-        const loadedTextures = await Promise.all(
-          paths.map((path) => Assets.load(path)),
+    const loads = paths.map((path) =>
+      Assets.load(path).catch((error) => {
+        console.warn(
+          `[office-textures] asset failed, using fallback: ${path}`,
+          error,
         );
+        return null;
+      }),
+    );
+    const allSettled = Promise.all(loads);
 
-        const textureMap = keys.reduce(
-          (acc, key, index) => {
-            acc[key] = loadedTextures[index];
-            return acc;
-          },
-          {} as Record<keyof OfficeTextures, Texture>,
-        );
+    // Bounded fallback: never let one permanently-pending Pixi load hold
+    // the entire scene forever. Late completions still upgrade textures
+    // when they arrive.
+    const timer = setTimeout(() => {
+      if (cancelled) return;
+      console.warn(
+        `[office-textures] readiness timeout after ${TEXTURE_READY_TIMEOUT_MS}ms; rendering with fallbacks`,
+      );
+      setLoaded(true);
+    }, TEXTURE_READY_TIMEOUT_MS);
 
-        setTextures(textureMap as OfficeTextures);
-        setLoaded(true);
-      } catch {
-        // Still mark as loaded to show fallback graphics
-        setLoaded(true);
-      }
+    allSettled.then((arr) => {
+      if (cancelled) return;
+      clearTimeout(timer);
+      setTextures(buildMap(arr) as OfficeTextures);
+      setLoaded(true);
+    });
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
     };
-
-    loadTextures();
   }, []);
 
   return { textures, loaded };
