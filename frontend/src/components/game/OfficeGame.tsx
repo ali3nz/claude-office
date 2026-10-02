@@ -266,6 +266,13 @@ function FloorSign({
   );
 }
 
+// Issue 226: with the elevator art gone, departing agents walk the old
+// off-floor queue path. Hide characters whose authoritative position is outside
+// the visible room so nobody appears to stand in the dark.
+function isOnVisibleFloor(x: number, y: number): boolean {
+  return x >= 40 && x <= 1150 && y >= 300 && y <= 1000;
+}
+
 // Issue 226 R3/R4: display-only movement group. Reads the behavior engine's
 // current offset for an agent and applies it every frame (no React re-render),
 // so the sprite and its label/bubble stay aligned.
@@ -733,6 +740,10 @@ export function OfficeGame(): ReactNode {
                           !isAgentInElevator(
                             agent.currentPosition.x,
                             agent.currentPosition.y,
+                          ) &&
+                          isOnVisibleFloor(
+                            agent.currentPosition.x,
+                            agent.currentPosition.y,
                           ),
                       )
                       .map((agent) => (
@@ -874,7 +885,12 @@ export function OfficeGame(): ReactNode {
                   {Array.from(agents.values())
                     .filter(
                       (agent) =>
-                        agent.name && !isInElevatorZone(agent.currentPosition),
+                        agent.name &&
+                        !isInElevatorZone(agent.currentPosition) &&
+                        isOnVisibleFloor(
+                          agent.currentPosition.x,
+                          agent.currentPosition.y,
+                        ),
                     )
                     .map((agent) => (
                       <BehaviorGroup
