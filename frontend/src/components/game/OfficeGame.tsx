@@ -790,6 +790,14 @@ export function OfficeGame(): ReactNode {
                             (agent.phase === "idle" ? 60 : 0)
                           }
                         >
+                          {/* TEMP DIAGNOSTIC: unmissable marker in the sprite layer */}
+                          <pixiGraphics
+                            draw={(g) => {
+                              g.clear();
+                              g.rect(-9, -18, 18, 18);
+                              g.fill(0xff00ff);
+                            }}
+                          />
                           <AgentSprite
                             id={agent.id}
                             name={agent.name}
