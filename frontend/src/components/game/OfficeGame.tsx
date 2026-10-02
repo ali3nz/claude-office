@@ -47,6 +47,7 @@ import { useAnimationSystem } from "@/systems/animationSystem";
 import { wireGameRuntime, unwireGameRuntime } from "@/systems/gameRuntime";
 import { useCompactionAnimation } from "@/systems/compactionAnimation";
 import { useOfficeTextures } from "@/hooks/useOfficeTextures";
+import { coMark } from "@/utils/coMark";
 import {
   CANVAS_WIDTH,
   CANVAS_HEIGHT,
@@ -171,6 +172,21 @@ if (typeof window !== "undefined") {
       const orig = console.error;
       console.error = (...a: unknown[]) => {
         push("cerr:" + a.map(serialize).join(" | "));
+        // Full React component stack kept separately (diagnostics): the joined
+        // entry above is capped, the stack is the locator.
+        for (const x of a) {
+          if (
+            x !== null &&
+            typeof x === "object" &&
+            typeof (x as { componentStack?: unknown }).componentStack === "string"
+          ) {
+            const cs = (x as { componentStack: string }).componentStack;
+            const d2 = coDiag();
+            if (d2 && d2["last_cs"] === undefined) {
+              d2["last_cs"] = cs.slice(0, 4000);
+            }
+          }
+        }
         return orig.apply(console, a);
       };
     }
@@ -216,6 +232,7 @@ function FloorSign({
   label: string;
   accent: string;
 }): ReactNode {
+  coMark("floorsign");
   const w = 120;
   const h = 24;
   const drawSign = useCallback(
@@ -257,6 +274,7 @@ function FloorSign({
 // Office-subtree probe (Sol C-first): distinguishes render from mount.
 function CoTreeProbe(): null {
   coSet("tree_render", "render");
+  coMark("probe");
   useEffect(() => {
     coSet("tree_state", "mounted");
   }, []);
@@ -277,6 +295,7 @@ class CoErrorBoundary extends Component<
       ? `pixi_error_${this.props.label}`
       : "pixi_error";
     coSet(key, String(error).slice(0, 300));
+    coMark(`caught:${this.props.label ?? "outer"}`);
   }
   render(): ReactNode {
     if (this.state.failed) return null;
@@ -476,6 +495,7 @@ export function OfficeGame(): ReactNode {
 
   // Diagnostics (Sol C-first): first gate-open marker for evidence ordering.
   if (typeof window !== "undefined" && spritesLoaded) coSet("gate_open", "yes");
+  if (typeof window !== "undefined" && spritesLoaded) coMark("gate-render");
 
   return (
     <div ref={containerRef} className="w-full h-full overflow-hidden relative">

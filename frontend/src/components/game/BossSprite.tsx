@@ -19,6 +19,7 @@ import { drawRightArm, drawLeftArm } from "./shared/drawArm";
 import { truncateBubbleText } from "@/utils/bubbleText";
 import { useCastTexture } from "@/hooks/useCastTexture";
 import { BOSS_SLUG } from "@/themes/w17ant-cast";
+import { coMark } from "@/utils/coMark";
 
 // ============================================================================
 // TYPES
@@ -112,6 +113,7 @@ interface BubbleProps {
 }
 
 function Bubble({ content, yOffset }: BubbleProps): ReactNode {
+  coMark("bubble");
   const { type = "thought", icon } = content;
   const text = truncateBubbleText(content.text);
 
@@ -211,6 +213,7 @@ function BossSpriteComponent({
   isTyping = false,
   isAway = false,
 }: BossSpriteProps): ReactNode {
+  coMark("boss");
   // Animation state for typing
   const [typingTime, setTypingTime] = useState(0);
 
@@ -400,6 +403,7 @@ function MobileBossComponent({
   jumpOffset = 0,
   scale = 1.0,
 }: MobileBossProps): ReactNode {
+  coMark("mobile");
   const drawBossCallback = useMemo(
     () => (g: Graphics) => drawBossBody(g, "working"),
     [],

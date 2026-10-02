@@ -13,6 +13,7 @@ import { Texture } from "pixi.js";
 import { ELEVATOR_POSITION } from "@/systems/queuePositions";
 import { AgentSprite } from "./AgentSprite";
 import type { AgentAnimationState } from "@/stores/gameStore";
+import { coMark } from "@/utils/coMark";
 
 interface ElevatorProps {
   /** Whether the elevator doors are open */
@@ -87,6 +88,7 @@ export function Elevator({
   headsetTexture,
   sunglassesTexture,
 }: ElevatorProps): ReactNode {
+  coMark("elev");
   const doorScale = useDoorAnimation(isOpen);
 
   // Filter agents that are inside the elevator

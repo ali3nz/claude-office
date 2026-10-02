@@ -13,6 +13,7 @@ import { CANVAS_WIDTH, CANVAS_HEIGHT } from "@/constants/canvas";
 import { ORCHESTRA_PALETTE } from "@/themes/orchestra-office";
 import { usePixiTexture } from "@/hooks/usePixiTexture";
 import { getRoomImage } from "@/themes/w17ant-cast";
+import { coMark } from "@/utils/coMark";
 
 // ============================================================================
 // CONSTANTS
@@ -77,6 +78,7 @@ function drawWalls(g: Graphics): void {
 export function OfficeBackground({
   floorTileTexture,
 }: OfficeBackgroundProps): ReactNode {
+  coMark("bg");
   const roomUrl = useMemo(() => getRoomImage(), []);
   const roomTexture = usePixiTexture(roomUrl);
 

@@ -9,6 +9,7 @@
 
 import { memo, useMemo, useCallback } from "react";
 import { Graphics, TextStyle } from "pixi.js";
+import { coMark } from "@/utils/coMark";
 
 // ============================================================================
 // TYPES
@@ -262,6 +263,7 @@ function TrashCanSpriteComponent({
   isCompacting = false,
   isStomping = false,
 }: TrashCanSpriteProps) {
+  coMark("trash");
   const frameIndex = useMemo(
     () => getFrameIndex(contextUtilization),
     [contextUtilization],

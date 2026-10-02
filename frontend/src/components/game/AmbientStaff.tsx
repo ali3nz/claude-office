@@ -23,6 +23,7 @@ import {
 } from "@/themes/w17ant-cast";
 import { DESK_SPOTS } from "@/themes/w17ant-spots";
 import type { Position } from "@/types";
+import { coMark } from "@/utils/coMark";
 
 const AMBIENT_COUNT = 5;
 const TICK_MS = 120;
@@ -65,6 +66,7 @@ function makeAmbient(i: number, now: number): AmbientAgent {
 }
 
 function AmbientFigure({ agent }: { agent: AmbientAgent }): ReactNode {
+  coMark("ambfig");
   const texture = useCastTexture(agent.slug, agent.facing);
   if (!texture) return null;
   const scale = SPRITE_HEIGHT / texture.height;
@@ -80,6 +82,7 @@ function AmbientFigure({ agent }: { agent: AmbientAgent }): ReactNode {
 }
 
 function AmbientStaffComponent(): ReactNode {
+  coMark("amb");
   const realCount = useGameStore((s) => s.agents.size);
   const [agents, setAgents] = useState<AmbientAgent[]>(() => {
     const now = Date.now();

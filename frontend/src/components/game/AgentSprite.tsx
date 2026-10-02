@@ -22,6 +22,7 @@ import { drawBubble, drawIconBadge } from "./shared/drawBubble";
 import { drawRightArm, drawLeftArm } from "./shared/drawArm";
 import { truncateBubbleText } from "@/utils/bubbleText";
 import { useCastTexture } from "@/hooks/useCastTexture";
+import { coMark } from "@/utils/coMark";
 import {
   getCastForAgent,
   getFacingFromDelta,
@@ -389,6 +390,7 @@ export interface AgentLabelProps {
 }
 
 function AgentLabelComponent({ name, position }: AgentLabelProps): ReactNode {
+  coMark("label");
   return (
     <pixiContainer x={position.x} y={position.y - 70} scale={0.5}>
       <pixiText
