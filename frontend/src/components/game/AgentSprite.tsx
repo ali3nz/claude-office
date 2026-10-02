@@ -344,10 +344,11 @@ function AgentSpriteComponent({
       let jx = 0;
       let jy = 0;
       if (typingRef.current) {
-        // Issue 226 R5 (operator: "sol docker jitter"): a soft activity sway,
-        // not a vibration. Low frequency, sub-pixel amplitude.
-        jx = Math.sin(t * 8) * 0.35;
-        jy = Math.sin(t * 11 + 1.7) * 0.25;
+        // Issue 226 R6 (operator: "I want to see typing"): a readable typing
+        // motion - a quick vertical key-tap with a small horizontal shift,
+        // roughly 3.5 taps/second, clearly visible but not a vibration.
+        jx = Math.sin(t * 22) * 0.5;
+        jy = Math.sin(t * 22 + 0.6) * 1.6;
       }
       node.x = jx;
       node.y = breathe + jy;

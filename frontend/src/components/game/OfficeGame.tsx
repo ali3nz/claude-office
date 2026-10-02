@@ -386,6 +386,18 @@ let deskAssignmentCache = new Map<string, number>();
 /** Dedicated corner seat per Sol gateway character (issue 226 R5). */
 const SOL_SEATS: Record<string, { x: number; y: number }> = PINNED_SEATS;
 
+/**
+ * Issue 226 R6 (operator: "the agents should never be facing the wall"): the
+ * W17ant seat list contains rear facings (back to camera). At rest we always
+ * use the FRONT variant of the same diagonal so every character looks into
+ * the room / at the viewer.
+ */
+function faceFront(facing: OfficeFacing): OfficeFacing {
+  if (facing === "rear-left") return "front-left";
+  if (facing === "rear-right") return "front-right";
+  return facing;
+}
+
 /** Seat facing for an agent (Sol characters face into the room). */
 function seatFacingFor(agent: {
   id: string;
@@ -397,7 +409,7 @@ function seatFacingFor(agent: {
   if (agent.name === "GhostReporting") return "front-right";
   if (agent.name === "TruFreedom") return "front-left";
   const deskNum = deskAssignmentCache.get(agent.id) ?? agent.desk;
-  if (deskNum) return getSpotForDesk(deskNum).facing;
+  if (deskNum) return faceFront(getSpotForDesk(deskNum).facing);
   return undefined;
 }
 

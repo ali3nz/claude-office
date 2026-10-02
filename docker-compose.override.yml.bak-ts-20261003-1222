@@ -1,0 +1,56 @@
+services:
+  claude-office:
+    ports: !override
+      - "192.168.1.240:8001:8000"
+    volumes: !override
+      - co-office-db:/app/data
+      - ./data/claude-ro:/claude-data:ro
+    environment:
+      - SUMMARY_ENABLED=${SUMMARY_ENABLED:-false}
+      - "BACKEND_CORS_ORIGINS=[\"http://localhost:3000\",\"http://127.0.0.1:3000\",\"http://0.0.0.0:3000\",\"http://localhost:8000\",\"http://127.0.0.1:8000\",\"http://192.168.1.240:8001\"]"
+      - CLAUDE_OFFICE_ALLOW_CIDR=${CLAUDE_OFFICE_ALLOW_CIDR:-192.168.1.0/24,192.168.208.0/20}
+      - CLAUDE_OFFICE_API_KEY=${CLAUDE_OFFICE_API_KEY}
+      - CLAUDE_OFFICE_INGEST_KEY=${CLAUDE_OFFICE_INGEST_KEY}
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+  co-bridge:
+    image: python:3.13-slim
+    container_name: co-bridge
+    command: ["python", "/bridge/bridge.py"]
+    environment:
+      - CO_BACKEND=http://claude-office:8000/api/v1/events
+      - CO_API_KEY=${CLAUDE_OFFICE_INGEST_KEY}
+      - CO_STATE_DIR=/state
+      - CO_FEED_KIT=/feeds/kitdir/observer-events.jsonl
+      - CO_FEED_OC=/feeds/ocdir/events.jsonl
+      - CO_FEED_FB=/feeds/fbdir/events.jsonl
+      - CO_FEED_AG=/feeds/agdir/events.jsonl
+      - CO_FEED_AI=/feeds/aidir
+      - CO_START_AT_END=1
+      - CO_POLL_SEC=5
+    volumes:
+      - ./bridge/bridge.py:/bridge/bridge.py:ro
+      - /home/ali3nz/docker/freebuff/workspace/work/ai-orchestration/runs:/feeds/kitdir:ro
+      - /home/ali3nz/docker/openchamber/data/pixel-office:/feeds/ocdir:ro
+      - /home/ali3nz/docker/freebuff/workspace/.freebuff/pixel-office:/feeds/fbdir:ro
+      - /home/ali3nz/docker/agenthome/data/events:/feeds/agdir:ro
+      - /home/ali3nz/docker/ai-agents:/feeds/aidir:ro
+      - co-bridge-state:/state
+    networks:
+      - default
+    restart: unless-stopped
+    mem_limit: 256m
+    cpus: 0.5
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+volumes:
+  co-office-db:
+    name: co-office-db
+  co-bridge-state:
+    name: co-bridge-state
