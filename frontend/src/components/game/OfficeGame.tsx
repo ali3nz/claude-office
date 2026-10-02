@@ -270,7 +270,23 @@ function FloorSign({
 // off-floor queue path. Hide characters whose authoritative position is outside
 // the visible room so nobody appears to stand in the dark.
 function isOnVisibleFloor(x: number, y: number): boolean {
-  return x >= 40 && x <= 1150 && y >= 300 && y <= 1000;
+  return x >= 40 && x <= 1150 && y >= 300 && y <= 1010;
+}
+
+// Departing agents walk the old elevator/queue path, which is off the visible
+// room now that the elevator art is gone: hide them until they despawn.
+const DEPARTING_PHASES = new Set([
+  "departing",
+  "in_departure_queue",
+  "walking_to_elevator",
+  "in_elevator",
+]);
+
+function isVisibleAgent(agent: { phase: string; currentPosition: { x: number; y: number } }): boolean {
+  return (
+    !DEPARTING_PHASES.has(agent.phase) &&
+    isOnVisibleFloor(agent.currentPosition.x, agent.currentPosition.y)
+  );
 }
 
 // Issue 226 R3/R4: display-only movement group. Reads the behavior engine's
@@ -740,11 +756,7 @@ export function OfficeGame(): ReactNode {
                           !isAgentInElevator(
                             agent.currentPosition.x,
                             agent.currentPosition.y,
-                          ) &&
-                          isOnVisibleFloor(
-                            agent.currentPosition.x,
-                            agent.currentPosition.y,
-                          ),
+                          ) && isVisibleAgent(agent),
                       )
                       .map((agent) => (
                         <BehaviorGroup
@@ -887,10 +899,7 @@ export function OfficeGame(): ReactNode {
                       (agent) =>
                         agent.name &&
                         !isInElevatorZone(agent.currentPosition) &&
-                        isOnVisibleFloor(
-                          agent.currentPosition.x,
-                          agent.currentPosition.y,
-                        ),
+                        isVisibleAgent(agent),
                     )
                     .map((agent) => (
                       <BehaviorGroup
