@@ -81,6 +81,11 @@ const CAST_SPRITE_HEIGHT = 133;
  * Issue 226 R4 (Sol): idle glance is a LOOK to the other side, not a turn
  * away from the desk, so left/right are mirrored.
  */
+/** Permanent avatar pins by display name (issue 226 R5). */
+const PINNED_CAST_BY_NAME: Record<string, string> = {
+  "Sol Docker": "michael-scott",
+};
+
 const MIRROR_FACING: Record<OfficeFacing, OfficeFacing> = {
   "front-left": "front-right",
   "front-right": "front-left",
@@ -230,7 +235,11 @@ function AgentSpriteComponent({
   const openFocusPopup = useAttentionStore((s) => s.openFocusPopup);
 
   // ---- W17ant cast selection -------------------------------------------
-  const slug = getCastForAgent(id);
+  // Operator (issue 226 R5): Sol Docker is the BOSS - pin the Mike Scott
+  // avatar so the role reads at a glance and never shuffles. Other persistent
+  // identities keep their deterministic hash avatar (stable per agent id).
+  const slug =
+    (name && PINNED_CAST_BY_NAME[name]) || getCastForAgent(id);
 
   // Facing from movement. The animation loop moves agents between renders, so
   // the direction must be derived from the render-phase position delta — the

@@ -170,13 +170,28 @@ export const DESKS: DeskFurniture[] = (
  * queue's final position (640, 940) in front of the desk, unblocked.
  */
 /**
- * Dedicated corner workstations for the two Sol gateway characters
- * (issue 226 R5, operator: "in the corner at boss type desks, not blocking
- * or overlapping any toons"). Placed left and right of the 10-desk cluster.
+ * PERSISTENT identities (operator, issue 226 R5): Sol Docker (Boss),
+ * Sol Webserver, GhostReporting and TruFreedom each get a FIXED workstation
+ * that never changes, and the two Sol characters never move or take breaks.
+ *
+ * Seats are feet anchors. Sol Docker sits at the boss desk (front-centre, on
+ * the rug); the others get dedicated desks outside the 10-workstation pool so
+ * they can never collide with a session character.
  */
-export const SOL_DESKS: DeskFurniture[] = [
-  { kind: "right-front", position: { x: 205, y: 735 } },
-  { kind: "left-front", position: { x: 1075, y: 735 } },
+export const BOSS_SEAT: Position = { x: 640, y: 930 };
+
+export const PINNED_SEATS: Record<string, Position> = {
+  "Sol Docker": BOSS_SEAT,
+  "Sol Webserver": { x: 1075, y: 735 },
+  "GhostReporting": { x: 205, y: 735 },
+  "TruFreedom": { x: 862, y: 882 },
+};
+
+/** Dedicated desks for the pinned seats (the boss desk already exists). */
+export const PINNED_DESKS: DeskFurniture[] = [
+  { kind: "right-front", position: { x: 1075, y: 735 } },
+  { kind: "left-front", position: { x: 205, y: 735 } },
+  { kind: "right-front", position: { x: 862, y: 882 } },
 ];
 
 export const BOSS_DESK: DeskFurniture = {

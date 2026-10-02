@@ -60,7 +60,7 @@ import {
   getSpotForDesk,
   COFFEE_SPOT,
   WATER_SPOT,
-  SOL_DESKS,
+  PINNED_SEATS,
 } from "@/themes/w17ant-spots";
 import { setBehavior, tickBehaviors, getOffset } from "@/systems/officeBehavior";
 import { coMark } from "@/utils/coMark";
@@ -356,7 +356,12 @@ function agentStateGlyph(agent: {
  * are ALWAYS present - they are infrastructure, not sessions.
  */
 const IDLE_TIMEOUT_MS = 10 * 60 * 1000;
-const ALWAYS_PRESENT = new Set(["Sol Docker", "Sol Webserver"]);
+const ALWAYS_PRESENT = new Set([
+  "Sol Docker",
+  "Sol Webserver",
+  "GhostReporting",
+  "TruFreedom",
+]);
 
 function isRecentlyActive(
   agent: { name: string | null; lastActivityAt?: number },
@@ -367,11 +372,11 @@ function isRecentlyActive(
   return now - agent.lastActivityAt < IDLE_TIMEOUT_MS;
 }
 
-/** Dedicated corner seat per Sol gateway character (issue 226 R5). */
-const SOL_SEATS: Record<string, { x: number; y: number }> = {
-  "Sol Docker": SOL_DESKS[0].position,
-  "Sol Webserver": SOL_DESKS[1].position,
-};
+/**
+ * Pinned seats for the four persistent identities (issue 226 R5, operator):
+ * their desks never change, and the two Sol characters never move or break.
+ */
+const SOL_SEATS: Record<string, { x: number; y: number }> = PINNED_SEATS;
 
 /** Seat facing for an agent (Sol characters face into the room). */
 function seatFacingFor(agent: {
@@ -380,6 +385,8 @@ function seatFacingFor(agent: {
 }): OfficeFacing | undefined {
   if (agent.name === "Sol Docker") return "front-right";
   if (agent.name === "Sol Webserver") return "front-left";
+  if (agent.name === "GhostReporting") return "front-right";
+  if (agent.name === "TruFreedom") return "front-left";
   if (agent.desk) return getSpotForDesk(agent.desk).facing;
   return undefined;
 }

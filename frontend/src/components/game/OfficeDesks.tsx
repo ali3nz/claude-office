@@ -16,7 +16,7 @@ import { usePixiTexture } from "@/hooks/usePixiTexture";
 import {
   DESKS,
   BOSS_DESK,
-  SOL_DESKS,
+  PINNED_DESKS,
   deskSpritePath,
   deskSpriteHeight,
   type DeskFurniture,
@@ -25,9 +25,15 @@ import {
 function DeskSprite({
   desk,
   boss = false,
+  zBias = 0,
 }: {
   desk: DeskFurniture;
   boss?: boolean;
+  /**
+   * Issue 226 R5: lower the desk's sort key so its occupant always renders in
+   * front of it (the Sol corner seats sit outside the W17ant spot z-map).
+   */
+  zBias?: number;
 }): ReactNode {
   const texture = usePixiTexture(deskSpritePath(desk.kind));
   if (!texture) return null;
@@ -41,7 +47,7 @@ function DeskSprite({
       y={desk.position.y}
       width={width}
       height={height}
-      zIndex={desk.position.y + (boss ? 0.5 : 0)}
+      zIndex={desk.position.y + zBias + (boss ? 0.5 : 0)}
     />
   );
 }
@@ -57,12 +63,12 @@ export function DeskCluster(): ReactNode {
   );
 }
 
-/** Sol gateway corner workstations (issue 226 R5). */
+/** Persistent-identity workstations (issue 226 R5). */
 export function SolDesks(): ReactNode {
   return (
     <>
-      {SOL_DESKS.map((desk, i) => (
-        <DeskSprite key={`sol-desk-${i}`} desk={desk} boss />
+      {PINNED_DESKS.map((desk, i) => (
+        <DeskSprite key={`pinned-desk-${i}`} desk={desk} zBias={-300} />
       ))}
     </>
   );
