@@ -301,8 +301,9 @@ function isVisibleAgent(agent: {
 }): boolean {
   if (DEPARTING_PHASES.has(agent.phase)) return false;
   const p = agentDisplayPosition(agent);
-  // Room floor bounds; unplaced agents at/near the origin are hidden too.
-  return p.x >= 150 && p.x <= 1140 && p.y >= 380 && p.y <= 930;
+  // Visible desk/floor region only: the room floor ends well above the canvas
+  // bottom, so a loose bound left heads poking in from off-floor positions.
+  return p.x >= 280 && p.x <= 1000 && p.y >= 400 && p.y <= 850;
 }
 
 // Issue 226 R3/R4: display-only movement group. Reads the behavior engine's
