@@ -239,7 +239,16 @@ class RoomOrchestrator:
 
         merged_agents: list[Agent] = []
         seated = 0
-        for session_id, entry in self._sessions.items():
+        # Persistent identities (the two ai-agents + the two catgpt gateways)
+        # always take a seat first so the cap never drops them.
+        def _is_persistent(sid: str) -> bool:
+            return sid.startswith("ai-") or "agentchat-sol" in sid
+
+        ordered = sorted(
+            self._sessions.items(),
+            key=lambda kv: (0 if _is_persistent(kv[0]) else 1),
+        )
+        for session_id, entry in ordered:
             if seated >= OFFICE_MAX_SEATED:
                 break
             state = entry.sm.to_game_state(session_id)
@@ -254,8 +263,12 @@ class RoomOrchestrator:
                     # 'sub-<conversation name>' unless they are the fixed
                     # gateway identities.
                     name = agent.name
-                    if not is_gateway:
-                        name = office_subagent_name(session_id, entry.sm.display_name)
+                    title = (entry.sm.display_name or "").strip()
+                    if not is_gateway and title:
+                        # Issue 226 R1: with a real conversation title the
+                        # operator wants "sub-<first 10 chars>"; without one we
+                        # keep the agent's own (curated) name.
+                        name = office_subagent_name(session_id, title)
                     merged_agents.append(
                         agent.model_copy(
                             update={

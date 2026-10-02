@@ -427,9 +427,10 @@ def run_ai_agents(state):
     for spec in AI_AGENTS:
         sid = spec["sid"]
         label = ai_agent_cycle(spec)
-        first = sid not in seen
+        first = not seen.get(sid + ":booted")
         if first:
             base = {"agent_id": spec["agent_id"], "project_dir": "/orchestra/ai-agents"}
+            booted = True
             for env in (
                 {"session_id": sid, "timestamp": iso_from_ts(time.time()),
                  "event_type": "session_start",
@@ -442,8 +443,14 @@ def run_ai_agents(state):
             ):
                 if post_envelope(env):
                     posted += 1
+                    time.sleep(POST_DELAY)
                 else:
                     failed += 1
+                    booted = False
+                    break
+            if not booted:
+                continue  # retry the whole bootstrap on the next poll
+            seen[sid + ":booted"] = True
         last = seen.get(sid)
         if first or last != label:
             seen[sid] = label
