@@ -135,17 +135,42 @@ if (typeof window !== "undefined") {
     const d = coDiag();
     if (d) {
       d["errors"] = d["errors"] ?? [];
+      const arr = d["errors"] as string[];
       const push = (s: string) => {
-        const arr = d["errors"] as string[];
-        if (arr.length < 20) arr.push(s.slice(0, 240));
+        if (arr.length < 24) arr.push(s.slice(0, 460));
       };
-      window.addEventListener("error", (e) => push("win:" + String(e.message)));
+      const serialize = (x: unknown): string => {
+        if (x instanceof Error) {
+          const st =
+            typeof x.stack === "string" ? x.stack.replace(/\s+/g, " ") : "";
+          return (
+            "Error:" +
+            String(x.message).slice(0, 160) +
+            (st ? " @ " + st.slice(0, 340) : "")
+          );
+        }
+        if (typeof x === "object" && x !== null) {
+          const info = x as { componentStack?: unknown };
+          if (typeof info.componentStack === "string") {
+            return "CS:" + info.componentStack.replace(/\s+/g, " ").slice(0, 400);
+          }
+          try {
+            return JSON.stringify(x).slice(0, 340);
+          } catch {
+            return "[obj]";
+          }
+        }
+        return String(x);
+      };
+      window.addEventListener("error", (e) =>
+        push("win:" + serialize((e as ErrorEvent).error ?? e.message)),
+      );
       window.addEventListener("unhandledrejection", (e) =>
-        push("rej:" + String((e.reason && (e.reason.message || e.reason)) || "?")),
+        push("rej:" + serialize((e as PromiseRejectionEvent).reason)),
       );
       const orig = console.error;
       console.error = (...a: unknown[]) => {
-        push("cerr:" + a.map((x) => String(x)).join(" "));
+        push("cerr:" + a.map(serialize).join(" | "));
         return orig.apply(console, a);
       };
     }
@@ -240,7 +265,7 @@ function CoTreeProbe(): null {
 
 // Catches render/lifecycle errors inside the office subtree (H2 evidence).
 class CoErrorBoundary extends Component<
-  { children: ReactNode },
+  { children: ReactNode; label?: string },
   { failed: boolean }
 > {
   state = { failed: false };
@@ -248,7 +273,10 @@ class CoErrorBoundary extends Component<
     return { failed: true };
   }
   componentDidCatch(error: unknown): void {
-    coSet("pixi_error", String(error).slice(0, 240));
+    const key = this.props.label
+      ? `pixi_error_${this.props.label}`
+      : "pixi_error";
+    coSet(key, String(error).slice(0, 300));
   }
   render(): ReactNode {
     if (this.state.failed) return null;
@@ -446,6 +474,9 @@ export function OfficeGame(): ReactNode {
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
+  // Diagnostics (Sol C-first): first gate-open marker for evidence ordering.
+  if (typeof window !== "undefined" && spritesLoaded) coSet("gate_open", "yes");
+
   return (
     <div ref={containerRef} className="w-full h-full overflow-hidden relative">
       <TransformWrapper
@@ -544,7 +575,9 @@ export function OfficeGame(): ReactNode {
                   <>
                   <CoTreeProbe />
                   {/* Floor and walls */}
-                  <OfficeBackground floorTileTexture={textures.floorTile} />
+                  <CoErrorBoundary label="bg">
+                    <OfficeBackground floorTileTexture={textures.floorTile} />
+                  </CoErrorBoundary>
 
                   {/* Boss area rug (legacy theme) - rendered right after floor */}
                   {!W17ANT_CAST_MODE && textures.bossRug && (
@@ -646,24 +679,27 @@ export function OfficeGame(): ReactNode {
                   )}
 
                   {/* Elevator with animated doors and agents inside */}
-                  <Elevator
-                    isOpen={isElevatorOpen}
-                    agents={agents}
-                    frameTexture={textures.elevatorFrame}
-                    doorTexture={textures.elevatorDoor}
-                    headsetTexture={textures.headset}
-                    sunglassesTexture={textures.sunglasses}
-                  />
-
-                  {/* Floor sign above elevator */}
-                  {floor && (
-                    <FloorSign
-                      label={`${floor.icon} ${floor.name}`}
-                      accent={floor.accent}
+                  <CoErrorBoundary label="elev">
+                    <Elevator
+                      isOpen={isElevatorOpen}
+                      agents={agents}
+                      frameTexture={textures.elevatorFrame}
+                      doorTexture={textures.elevatorDoor}
+                      headsetTexture={textures.headset}
+                      sunglassesTexture={textures.sunglasses}
                     />
-                  )}
+
+                    {/* Floor sign above elevator */}
+                    {floor && (
+                      <FloorSign
+                        label={`${floor.icon} ${floor.name}`}
+                        accent={floor.accent}
+                      />
+                    )}
+                  </CoErrorBoundary>
 
                   {/* Y-sorted layer: chairs and agents sorted by Y position (higher Y = in front) */}
+                  <CoErrorBoundary label="ysort">
                   <pixiContainer sortableChildren={true}>
                     {/* Desk chairs (legacy theme; the DM art has its own desks) */}
                     {!W17ANT_CAST_MODE &&
@@ -721,7 +757,8 @@ export function OfficeGame(): ReactNode {
                       ))}
                     {/* Ambient Office cast when no real agents exist (render-only) */}
                     <AmbientStaff />
-                  </pixiContainer>                  {/* Desk surfaces and keyboards (legacy theme; DM art has its own) */}
+                  </pixiContainer>
+                  </CoErrorBoundary>                  {/* Desk surfaces and keyboards (legacy theme; DM art has its own) */}
                   {!W17ANT_CAST_MODE && (
                     <DeskSurfacesBase
                       deskCount={deskCount}
@@ -776,23 +813,25 @@ export function OfficeGame(): ReactNode {
                   )}
 
                   {/* Boss */}
-                  <BossSprite
-                    position={boss.position}
-                    state={boss.backendState}
-                    bubble={boss.bubble.content}
-                    inUseBy={boss.inUseBy}
-                    currentTask={boss.currentTask}
-                    chairTexture={textures.chair}
-                    deskTexture={textures.desk}
-                    keyboardTexture={textures.keyboard}
-                    monitorTexture={textures.monitor}
-                    phoneTexture={textures.phone}
-                    headsetTexture={textures.headset}
-                    sunglassesTexture={textures.sunglasses}
-                    renderBubble={false}
-                    isTyping={boss.isTyping}
-                    isAway={compactionAnimation.phase !== "idle"}
-                  />
+                  <CoErrorBoundary label="boss">
+                    <BossSprite
+                      position={boss.position}
+                      state={boss.backendState}
+                      bubble={boss.bubble.content}
+                      inUseBy={boss.inUseBy}
+                      currentTask={boss.currentTask}
+                      chairTexture={textures.chair}
+                      deskTexture={textures.desk}
+                      keyboardTexture={textures.keyboard}
+                      monitorTexture={textures.monitor}
+                      phoneTexture={textures.phone}
+                      headsetTexture={textures.headset}
+                      sunglassesTexture={textures.sunglasses}
+                      renderBubble={false}
+                      isTyping={boss.isTyping}
+                      isAway={compactionAnimation.phase !== "idle"}
+                    />
+                  </CoErrorBoundary>
 
                   {/* Mobile Boss (when walking to/from trash can) */}
                   {compactionAnimation.bossPosition && (
@@ -806,17 +845,19 @@ export function OfficeGame(): ReactNode {
                   )}
 
                   {/* Trash Can (Context Utilization Indicator) - follows boss desk */}
-                  <TrashCanSprite
-                    x={boss.position.x + TRASH_CAN_OFFSET.x * 0.4}
-                    y={boss.position.y + TRASH_CAN_OFFSET.y * 0.4}
-                    contextUtilization={
-                      compactionAnimation.phase !== "idle"
-                        ? compactionAnimation.animatedContextUtilization
-                        : contextUtilization
-                    }
-                    isCompacting={isCompacting}
-                    isStomping={compactionAnimation.isStomping}
-                  />
+                  <CoErrorBoundary label="trash">
+                    <TrashCanSprite
+                      x={boss.position.x + TRASH_CAN_OFFSET.x * 0.4}
+                      y={boss.position.y + TRASH_CAN_OFFSET.y * 0.4}
+                      contextUtilization={
+                        compactionAnimation.phase !== "idle"
+                          ? compactionAnimation.animatedContextUtilization
+                          : contextUtilization
+                      }
+                      isCompacting={isCompacting}
+                      isStomping={compactionAnimation.isStomping}
+                    />
+                  </CoErrorBoundary>
 
                   {/* Debug overlays */}
                   {debugMode && (

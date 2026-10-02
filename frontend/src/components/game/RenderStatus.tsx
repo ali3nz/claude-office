@@ -96,6 +96,10 @@ function RenderStatusComponent({
     const w = window as unknown as { __co?: Record<string, unknown> };
     const d = w.__co;
     if (!d) return null;
+    const pixiErrors = Object.keys(d)
+      .filter((k) => k.startsWith("pixi_error"))
+      .map((k) => `${k.replace("pixi_error", "pe")}=${String(d[k]).slice(0, 140)}`)
+      .join("; ");
     return {
       app: String(d["app_state"] ?? "?"),
       tree: String(d["tree_state"] ?? String(d["tree_render"] ?? "?")),
@@ -103,20 +107,23 @@ function RenderStatusComponent({
         d["renderer_canvas_is_dom_canvas"] === undefined
           ? "?"
           : String(d["renderer_canvas_is_dom_canvas"]),
+      gate: d["gate_open"] === undefined ? "?" : String(d["gate_open"]),
+      canvases:
+        d["dom_canvas_count"] === undefined ? "?" : String(d["dom_canvas_count"]),
+      pixiErrors,
       errors: Array.isArray(d["errors"]) ? (d["errors"] as string[]) : [],
     };
   };
   const [diag, setDiag] = useState(readDiag);
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
-    if (init.resolved || init.rejected) return;
     const timer = setInterval(() => {
       setNow(Date.now());
       setCanvasCount(readCanvasCount());
       setDiag(readDiag());
     }, 1000);
     return () => clearInterval(timer);
-  }, [init.resolved, init.rejected]);
+  }, []);
 
   const stalled =
     init.entered && !init.resolved && !init.rejected && now - init.enteredAt > FAIL_AFTER_MS;
@@ -145,9 +152,14 @@ function RenderStatusComponent({
         {assets.texturesLoaded}/{assets.texturesLoaded + assets.texturesFailed}
         {assets.timeoutFired ? " · ASSET-TIMEOUT" : ""} · {buildCommit}
         {diag
-          ? ` · diag app:${diag.app} tree:${diag.tree} canvasMatch:${diag.canvasMatch} errs:${diag.errors.length}`
+          ? ` · diag app:${diag.app} tree:${diag.tree} gate:${diag.gate} cv:${diag.canvases} canvasMatch:${diag.canvasMatch} errs:${diag.errors.length}${diag.pixiErrors ? ` · pixi:${diag.pixiErrors}` : ""}`
           : ""}
-        {diag && diag.errors.length > 0 ? ` · err0:${diag.errors[0]}` : ""}
+        {diag && diag.errors.length > 0
+          ? ` · err0:${diag.errors[0].slice(0, 220)}`
+          : ""}
+        {diag && diag.errors.length > 1
+          ? ` · err1:${diag.errors[1].slice(0, 220)}`
+          : ""}
       </div>
       {failed && (
         <div className="mt-1 px-2 py-1 rounded bg-slate-900/90 border border-red-800 text-slate-300 whitespace-pre-wrap max-w-[330px]">
