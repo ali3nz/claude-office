@@ -300,6 +300,7 @@ const DEPARTING_PHASES = new Set([
  * their animated position.
  */
 function agentDisplayPosition(agent: {
+  id: string;
   phase: string;
   name?: string | null;
   desk?: number | null;
@@ -312,9 +313,11 @@ function agentDisplayPosition(agent: {
   }
   // Any agent with an assigned desk is ALWAYS drawn at that workstation. This
   // is deterministic and immune to arrival/animation timing: a fresh load can
-  // never leave an assigned agent invisible at a spawn point.
-  if (agent.desk) {
-    return getSpotForDesk(agent.desk).position;
+  // never leave an assigned agent invisible at a spawn point. Agents the
+  // backend did not desk get a computed free workstation (issue 226 R5).
+  const deskNum = deskAssignmentCache.get(agent.id) ?? agent.desk;
+  if (deskNum) {
+    return getSpotForDesk(deskNum).position;
   }
   return agent.currentPosition;
 }
@@ -373,13 +376,19 @@ function isRecentlyActive(
 }
 
 /**
- * Pinned seats for the four persistent identities (issue 226 R5, operator):
- * their desks never change, and the two Sol characters never move or break.
+ * Issue 226 R5 (operator): desk-less agents used to stand on bare floor.
+ * OfficeGame computes a deterministic desk per visible agent each render
+ * (backend desk when valid, otherwise the lowest free workstation) and this
+ * render-scoped cache lets the position helpers see it.
  */
+let deskAssignmentCache = new Map<string, number>();
+
+/** Dedicated corner seat per Sol gateway character (issue 226 R5). */
 const SOL_SEATS: Record<string, { x: number; y: number }> = PINNED_SEATS;
 
 /** Seat facing for an agent (Sol characters face into the room). */
 function seatFacingFor(agent: {
+  id: string;
   name: string | null;
   desk?: number | null;
 }): OfficeFacing | undefined {
@@ -387,12 +396,14 @@ function seatFacingFor(agent: {
   if (agent.name === "Sol Webserver") return "front-left";
   if (agent.name === "GhostReporting") return "front-right";
   if (agent.name === "TruFreedom") return "front-left";
-  if (agent.desk) return getSpotForDesk(agent.desk).facing;
+  const deskNum = deskAssignmentCache.get(agent.id) ?? agent.desk;
+  if (deskNum) return getSpotForDesk(deskNum).facing;
   return undefined;
 }
 
 /** Only agents on the room floor are drawn (departures and strays hidden). */
 function isVisibleAgent(agent: {
+  id: string;
   phase: string;
   name?: string | null;
   desk?: number | null;
@@ -403,8 +414,9 @@ function isVisibleAgent(agent: {
   if (agent.name && SOL_SEATS[agent.name]) return true;
   // Agents with a desk are seated at a known-good workstation by construction
   // (issue 226 R5: this must actually SKIP the region test, or seats outside
-  // the box - e.g. the Sol corners - are hidden).
-  if (agent.desk) return true;
+  // the box - e.g. the Sol corners - are hidden). The computed assignment
+  // counts too, so a backend desk-less agent still gets a real workstation.
+  if (agent.desk || deskAssignmentCache.has(agent.id)) return true;
   const p = agentDisplayPosition(agent);
   return p.x >= 280 && p.x <= 1000 && p.y >= 400 && p.y <= 850;
 }
@@ -643,13 +655,35 @@ export function OfficeGame(): ReactNode {
 
   // Issue 226 R5 (operator): render only OCCUPIED desks, and only the desks
   // belonging to pinned identities that are actually on the floor.
-  const occupiedDeskNumbers = useMemo(() => {
-    const s = new Set<number>();
+  const deskAssignments = useMemo(() => {
+    const used = new Set<number>();
+    const map = new Map<string, number>();
+    const freeDesk = (): number | null => {
+      for (let n = 1; n <= 10; n++) if (!used.has(n)) return n;
+      return null;
+    };
     for (const a of visibleAgents) {
-      if (a.desk && !(a.name && PINNED_SEATS[a.name])) s.add(a.desk);
+      if (a.name && PINNED_SEATS[a.name]) continue; // pinned: own desk/seat
+      if (a.desk && !used.has(a.desk)) {
+        used.add(a.desk);
+        map.set(a.id, a.desk);
+      }
     }
-    return s;
+    for (const a of visibleAgents) {
+      if (map.has(a.id) || (a.name && PINNED_SEATS[a.name])) continue;
+      const n = freeDesk();
+      if (n !== null) {
+        used.add(n);
+        map.set(a.id, n);
+      }
+    }
+    return map;
   }, [visibleAgents]);
+  deskAssignmentCache = deskAssignments;
+  const occupiedDeskNumbers = useMemo(
+    () => new Set<number>(deskAssignments.values()),
+    [deskAssignments],
+  );
   const presentPinned = useMemo(() => {
     const s = new Set<string>();
     for (const a of visibleAgents) {
