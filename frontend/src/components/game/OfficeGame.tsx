@@ -97,7 +97,6 @@ import {
 import { ZoomControls } from "./ZoomControls";
 import { LoadingScreen } from "./LoadingScreen";
 import { OfficeBackground } from "./OfficeBackground";
-import { AmbientStaff } from "./AmbientStaff";
 import { DeskCluster, BossDesk } from "./OfficeDesks";
 import {
   RenderStatus,
@@ -778,8 +777,6 @@ export function OfficeGame(): ReactNode {
                           />
                         </pixiContainer>
                       ))}
-                    {/* Ambient Office cast when no real agents exist (render-only) */}
-                    <AmbientStaff />
                   </pixiContainer>
                   </CoErrorBoundary>
                   {/* Desk surfaces and keyboards (legacy theme; DM art has its own) */}
