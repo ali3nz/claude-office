@@ -147,6 +147,7 @@ function RenderStatusComponent({
         {diag
           ? ` · diag app:${diag.app} tree:${diag.tree} canvasMatch:${diag.canvasMatch} errs:${diag.errors.length}`
           : ""}
+        {diag && diag.errors.length > 0 ? ` · err0:${diag.errors[0]}` : ""}
       </div>
       {failed && (
         <div className="mt-1 px-2 py-1 rounded bg-slate-900/90 border border-red-800 text-slate-300 whitespace-pre-wrap max-w-[330px]">
