@@ -265,7 +265,8 @@ function BossSpriteComponent({
   const bubbleOffset = -80;
 
   // W17ant cast sprite for the boss; null → legacy fallback rendering
-  const bossTexture = useCastTexture(BOSS_SLUG, "front-right");
+  // Issue 226 R5: the boss works at his computer (back to the viewer).
+  const bossTexture = useCastTexture(BOSS_SLUG, "rear-left");
   const useCastRendering = bossTexture !== null;
 
   return (

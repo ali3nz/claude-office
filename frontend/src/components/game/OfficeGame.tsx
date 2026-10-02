@@ -47,6 +47,7 @@ import { useAnimationSystem } from "@/systems/animationSystem";
 import { wireGameRuntime, unwireGameRuntime } from "@/systems/gameRuntime";
 import { useCompactionAnimation } from "@/systems/compactionAnimation";
 import { useOfficeTextures } from "@/hooks/useOfficeTextures";
+import { getSpotForDesk } from "@/themes/w17ant-spots";
 import { coMark } from "@/utils/coMark";
 import {
   CANVAS_WIDTH,
@@ -774,6 +775,11 @@ export function OfficeGame(): ReactNode {
                             renderBubble={false}
                             renderLabel={false}
                             isTyping={agent.isTyping}
+                            seatFacing={
+                              agent.desk
+                                ? getSpotForDesk(agent.desk).facing
+                                : undefined
+                            }
                           />
                         </pixiContainer>
                       ))}

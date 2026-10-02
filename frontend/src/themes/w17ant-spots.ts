@@ -48,25 +48,6 @@ interface RawSpot {
   z: number;
 }
 
-export const DESK_SPOTS: DeskSpot[] = (
-  [
-    { p: [25.8, 71], f: "rear-left", z: 85 },
-    { p: [37.9, 68.2], f: "rear-right", z: 85 },
-    { p: [26.9, 59.2], f: "front-left", z: 40 },
-    { p: [38.5, 55.2], f: "rear-left", z: 58 },
-    { p: [48.9, 52.9], f: "rear-right", z: 70 },
-    { p: [38.8, 43.6], f: "front-left", z: 30 },
-    { p: [52.7, 78.8], f: "rear-left", z: 95 },
-    { p: [65.9, 75.8], f: "rear-right", z: 95 },
-    { p: [55.2, 66.8], f: "front-left", z: 55 },
-    { p: [68.7, 66.2], f: "front-right", z: 55 },
-  ] as RawSpot[]
-).map(({ p, f, z }) => ({
-  position: artToCanvas((p[0] / 100) * ART_WIDTH, (p[1] / 100) * ART_HEIGHT),
-  facing: f,
-  z,
-}));
-
 /** Deterministic desk spot for desk number N (1-indexed, cycles if > 10). */
 export function getSpotForDesk(deskNum: number): DeskSpot {
   const index = ((deskNum - 1) % DESK_SPOTS.length + DESK_SPOTS.length) % DESK_SPOTS.length;
@@ -149,6 +130,22 @@ export const DESKS: DeskFurniture[] = (
 ).map(({ k, p }) => ({
   kind: k,
   position: artToCanvas((p[0] / 100) * ART_WIDTH, (p[1] / 100) * ART_HEIGHT),
+}));
+
+/**
+ * Seated character anchors (issue 226 R2): derived from the RENDERED
+ * workstations so everyone visibly works AT a computer instead of standing at
+ * W17ant's cluster-edge percentages. The character stands just behind the desk
+ * (feet a little above the desk's front edge), back to the viewer, facing the
+ * monitors. `z` is the desk's front edge so the desk renders in front of the
+ * seated character. Single source of truth: DESKS.
+ */
+const SEAT_BEHIND_OFFSET = 22;
+
+export const DESK_SPOTS: DeskSpot[] = DESKS.map((desk) => ({
+  position: { x: desk.position.x, y: desk.position.y - SEAT_BEHIND_OFFSET },
+  facing: desk.kind.startsWith("left") ? "rear-left" : "rear-right",
+  z: desk.position.y,
 }));
 
 /**

@@ -46,6 +46,8 @@ export interface AgentSpriteProps {
   renderBubble?: boolean; // Whether to render bubble (default true)
   renderLabel?: boolean; // Whether to render name label (default true)
   isTyping?: boolean; // Whether agent is typing (animates arms)
+  /** Issue 226 R2: facing to use while seated at the workstation (not moving). */
+  seatFacing?: OfficeFacing;
 }
 
 // ============================================================================
@@ -190,6 +192,7 @@ function AgentSpriteComponent({
   sunglassesTexture: _sunglassesTexture,
   renderBubble = true,
   renderLabel = true,
+  seatFacing,
   isTyping: _isTyping = false,
 }: AgentSpriteProps): ReactNode {
   const clickToFocusEnabled = usePreferencesStore((s) => s.clickToFocusEnabled);
@@ -211,9 +214,15 @@ function AgentSpriteComponent({
   const dx = position.x - prevPosRef.current.x;
   // eslint-disable-next-line react-hooks/refs
   const dy = position.y - prevPosRef.current.y;
-  if (Math.abs(dx) + Math.abs(dy) > 0.01) {
+  const moving = Math.abs(dx) + Math.abs(dy) > 0.01;
+  if (moving) {
     // eslint-disable-next-line react-hooks/refs
     facingRef.current = getFacingFromDelta(dx, dy);
+  } else if (seatFacing) {
+    // Issue 226 R2: seated characters face their monitors, not the last
+    // walking direction (the "staring at the wall" defect).
+    // eslint-disable-next-line react-hooks/refs
+    facingRef.current = seatFacing;
   }
   // eslint-disable-next-line react-hooks/refs
   prevPosRef.current = position;
