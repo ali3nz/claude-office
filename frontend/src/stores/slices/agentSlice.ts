@@ -70,8 +70,22 @@ export const createAgentSlice: StateCreator<GameStore, [], [], AgentSlice> = (
       const agent = state.agents.get(agentId);
       if (!agent) return state;
       const delta = typeof patch === "function" ? patch(agent) : patch;
+      // Issue 226 R5: only REAL activity refreshes the idle clock. Pure
+      // locomotion writes (position/path/phase) must not keep an idle agent
+      // on the floor forever.
+      const MOVEMENT_KEYS = new Set([
+        "currentPosition",
+        "targetPosition",
+        "path",
+        "phase",
+      ]);
+      const isActivity = Object.keys(delta).some((k) => !MOVEMENT_KEYS.has(k));
       const newAgents = new Map(state.agents);
-      newAgents.set(agentId, { ...agent, ...delta });
+      newAgents.set(agentId, {
+        ...agent,
+        ...delta,
+        ...(isActivity ? { lastActivityAt: Date.now() } : {}),
+      });
       return { agents: newAgents };
     });
 
@@ -100,6 +114,7 @@ export const createAgentSlice: StateCreator<GameStore, [], [], AgentSlice> = (
           queueType: null,
           queueIndex: -1,
           isTyping: false,
+          lastActivityAt: Date.now(),
         };
         newAgents.set(backendAgent.id, animState);
 

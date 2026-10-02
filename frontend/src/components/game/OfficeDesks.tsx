@@ -16,6 +16,7 @@ import { usePixiTexture } from "@/hooks/usePixiTexture";
 import {
   DESKS,
   BOSS_DESK,
+  SOL_DESKS,
   deskSpritePath,
   deskSpriteHeight,
   type DeskFurniture,
@@ -51,6 +52,17 @@ export function DeskCluster(): ReactNode {
     <>
       {DESKS.map((desk, i) => (
         <DeskSprite key={`desk-${i}`} desk={desk} />
+      ))}
+    </>
+  );
+}
+
+/** Sol gateway corner workstations (issue 226 R5). */
+export function SolDesks(): ReactNode {
+  return (
+    <>
+      {SOL_DESKS.map((desk, i) => (
+        <DeskSprite key={`sol-desk-${i}`} desk={desk} boss />
       ))}
     </>
   );

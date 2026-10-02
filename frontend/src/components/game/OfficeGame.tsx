@@ -19,7 +19,15 @@ import {
   Sprite,
   Application as PixiApplication,
 } from "pixi.js";
-import { Component, useMemo, useEffect, useRef, useCallback, type ReactNode } from "react";
+import {
+  Component,
+  useMemo,
+  useEffect,
+  useRef,
+  useCallback,
+  useState,
+  type ReactNode,
+} from "react";
 import { useTick } from "@pixi/react";
 import {
   TransformWrapper,
@@ -48,7 +56,12 @@ import { useAnimationSystem } from "@/systems/animationSystem";
 import { wireGameRuntime, unwireGameRuntime } from "@/systems/gameRuntime";
 import { useCompactionAnimation } from "@/systems/compactionAnimation";
 import { useOfficeTextures } from "@/hooks/useOfficeTextures";
-import { getSpotForDesk, COFFEE_SPOT, WATER_SPOT } from "@/themes/w17ant-spots";
+import {
+  getSpotForDesk,
+  COFFEE_SPOT,
+  WATER_SPOT,
+  SOL_DESKS,
+} from "@/themes/w17ant-spots";
 import { setBehavior, tickBehaviors, getOffset } from "@/systems/officeBehavior";
 import { coMark } from "@/utils/coMark";
 import {
@@ -100,8 +113,11 @@ import {
 import { ZoomControls } from "./ZoomControls";
 import { LoadingScreen } from "./LoadingScreen";
 import { OfficeBackground } from "./OfficeBackground";
-import { DeskCluster, BossDesk } from "./OfficeDesks";
-import { W17ANT_CAST_MODE } from "@/themes/w17ant-cast";
+import { DeskCluster, SolDesks, BossDesk } from "./OfficeDesks";
+import {
+  W17ANT_CAST_MODE,
+  type OfficeFacing,
+} from "@/themes/w17ant-cast";
 
 // Application lifecycle sequencing for the black-floor diagnosis (issue 212,
 // Sol-approved instrumentation only — no behavior change). Module scope so
@@ -285,9 +301,15 @@ const DEPARTING_PHASES = new Set([
  */
 function agentDisplayPosition(agent: {
   phase: string;
+  name?: string | null;
   desk?: number | null;
   currentPosition: { x: number; y: number };
 }): { x: number; y: number } {
+  // Issue 226 R5: the two Sol gateway characters always sit at their own
+  // corner workstations, outside the normal desk pool.
+  if (agent.name && SOL_SEATS[agent.name]) {
+    return SOL_SEATS[agent.name];
+  }
   // Any agent with an assigned desk is ALWAYS drawn at that workstation. This
   // is deterministic and immune to arrival/animation timing: a fresh load can
   // never leave an assigned agent invisible at a spawn point.
@@ -325,6 +347,41 @@ function agentStateGlyph(agent: {
     default:
       return null;
   }
+}
+
+/**
+ * Issue 226 R5 (operator): idle agents leave the floor after 10 minutes
+ * without activity ("they can remain idle for only 10 minutes then
+ * disappear unless the chat is reactivated"). The two Sol gateway characters
+ * are ALWAYS present - they are infrastructure, not sessions.
+ */
+const IDLE_TIMEOUT_MS = 10 * 60 * 1000;
+const ALWAYS_PRESENT = new Set(["Sol Docker", "Sol Webserver"]);
+
+function isRecentlyActive(
+  agent: { name: string | null; lastActivityAt?: number },
+  now: number,
+): boolean {
+  if (agent.name && ALWAYS_PRESENT.has(agent.name)) return true;
+  if (!agent.lastActivityAt) return true;
+  return now - agent.lastActivityAt < IDLE_TIMEOUT_MS;
+}
+
+/** Dedicated corner seat per Sol gateway character (issue 226 R5). */
+const SOL_SEATS: Record<string, { x: number; y: number }> = {
+  "Sol Docker": SOL_DESKS[0].position,
+  "Sol Webserver": SOL_DESKS[1].position,
+};
+
+/** Seat facing for an agent (Sol characters face into the room). */
+function seatFacingFor(agent: {
+  name: string | null;
+  desk?: number | null;
+}): OfficeFacing | undefined {
+  if (agent.name === "Sol Docker") return "front-right";
+  if (agent.name === "Sol Webserver") return "front-left";
+  if (agent.desk) return getSpotForDesk(agent.desk).facing;
+  return undefined;
 }
 
 /** Only agents on the room floor are drawn (departures and strays hidden). */
@@ -555,6 +612,21 @@ export function OfficeGame(): ReactNode {
   // Diagnostics (Sol C-first): first gate-open marker for evidence ordering.
   if (typeof window !== "undefined" && spritesLoaded) coSet("gate_open", "yes");
   if (typeof window !== "undefined" && spritesLoaded) coMark("gate-render");
+
+  // Issue 226 R5: periodic re-render so agents idle >10 min leave the floor
+  // without needing an unrelated store update to trigger a render.
+  const [idleTick, setIdleTick] = useState(() => Date.now());
+  useEffect(() => {
+    const id = window.setInterval(() => setIdleTick(Date.now()), 30_000);
+    return () => window.clearInterval(id);
+  }, []);
+  const visibleAgents = useMemo(
+    () =>
+      Array.from(agents.values()).filter((a) =>
+        isRecentlyActive(a, idleTick),
+      ),
+    [agents, idleTick],
+  );
 
   // Issue 226 R3/R4: derive each real agent's display behavior from state it
   // already has (no new authoritative source): consult agents walk to a Sol
@@ -809,7 +881,7 @@ export function OfficeGame(): ReactNode {
                       })}
 
                     {/* Agents outside elevator - zIndex based on feet Y position */}
-                    {Array.from(agents.values())
+                    {visibleAgents
                       .filter((agent) => isVisibleAgent(agent))
                       .map((agent) => (
                         <BehaviorGroup
@@ -836,11 +908,7 @@ export function OfficeGame(): ReactNode {
                             renderBubble={false}
                             renderLabel={false}
                             isTyping={agent.isTyping}
-                            seatFacing={
-                              agent.desk
-                                ? getSpotForDesk(agent.desk).facing
-                                : undefined
-                            }
+                            seatFacing={seatFacingFor(agent)}
                           />
                         </BehaviorGroup>
                       ))}
@@ -859,7 +927,7 @@ export function OfficeGame(): ReactNode {
                   {/* Agent arms - rendered after desk/keyboard, before headsets */}
                   {/* Hidden under the DM art: cast sprites already include arms */}
                   {!W17ANT_CAST_MODE &&
-                    Array.from(agents.values())
+                    visibleAgents
                       .filter((agent) => agent.phase === "idle")
                       .map((agent) => (
                         <AgentArms
@@ -872,7 +940,7 @@ export function OfficeGame(): ReactNode {
                   {/* Agent headsets (legacy theme; cast sprites have their own) */}
                   {!W17ANT_CAST_MODE &&
                     textures.headset &&
-                    Array.from(agents.values())
+                    visibleAgents
                       .filter((agent) => agent.phase === "idle")
                       .map((agent) => (
                         <AgentHeadset
@@ -902,6 +970,9 @@ export function OfficeGame(): ReactNode {
 
                   {/* Boss desk (W17ant workstation, drawn behind the boss) */}
                   {W17ANT_CAST_MODE && <BossDesk />}
+
+                  {/* Sol gateway corner workstations (issue 226 R5) */}
+                  {W17ANT_CAST_MODE && <SolDesks />}
 
                   {/* Boss character removed (issue 226): only real agents
                       appear on the floor. His workstation stays as furniture. */}
@@ -948,7 +1019,7 @@ export function OfficeGame(): ReactNode {
                   )}
 
                   {/* Labels Layer - rendered on top of most things */}
-                  {Array.from(agents.values())
+                  {visibleAgents
                     .filter((agent) => agent.name && isVisibleAgent(agent))
                     .map((agent) => (
                       <BehaviorGroup
@@ -966,7 +1037,7 @@ export function OfficeGame(): ReactNode {
                     ))}
 
                   {/* Character Type Overlays - crown/badge/dot per agent type */}
-                  {Array.from(agents.values())
+                  {visibleAgents
                     .filter(
                       (agent) =>
                         agent.characterType &&
@@ -1034,7 +1105,7 @@ export function OfficeGame(): ReactNode {
                     ))}
 
                   {/* Bubbles Layer - rendered on top of everything */}
-                  {Array.from(agents.values())
+                  {visibleAgents
                     .filter(
                       (agent) =>
                         agent.bubble.content &&

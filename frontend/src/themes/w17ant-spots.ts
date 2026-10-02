@@ -169,6 +169,16 @@ export const DESKS: DeskFurniture[] = (
  * feet), which reads as "Michael behind his desk" and keeps the departure
  * queue's final position (640, 940) in front of the desk, unblocked.
  */
+/**
+ * Dedicated corner workstations for the two Sol gateway characters
+ * (issue 226 R5, operator: "in the corner at boss type desks, not blocking
+ * or overlapping any toons"). Placed left and right of the 10-desk cluster.
+ */
+export const SOL_DESKS: DeskFurniture[] = [
+  { kind: "right-front", position: { x: 205, y: 735 } },
+  { kind: "left-front", position: { x: 1075, y: 735 } },
+];
+
 export const BOSS_DESK: DeskFurniture = {
   kind: "right-front",
   position: {
