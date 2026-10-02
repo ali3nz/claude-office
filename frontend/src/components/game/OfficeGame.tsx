@@ -277,8 +277,17 @@ const DEPARTING_PHASES = new Set([
   "in_elevator",
 ]);
 
-function isVisibleAgent(agent: { phase: string }): boolean {
-  return !DEPARTING_PHASES.has(agent.phase);
+function isVisibleAgent(agent: {
+  phase: string;
+  currentPosition: { x: number; y: number };
+}): boolean {
+  if (DEPARTING_PHASES.has(agent.phase)) return false;
+  const { x, y } = agent.currentPosition;
+  // Hide only the old off-floor departure column (far right / below the room).
+  // Agents that have not been placed yet legitimately sit at/near the origin,
+  // so never hide those.
+  if (x > 1150 || y > 1010) return false;
+  return true;
 }
 
 // Issue 226 R3/R4: display-only movement group. Reads the behavior engine's
