@@ -143,6 +143,20 @@ export const WATER_SPOT: Position = artToCanvas(
   (46.6 / 100) * ART_HEIGHT,
 );
 
+/**
+ * Issue 226 R5 (operator): the SEAT list and the FURNITURE list are two
+ * different orderings of the same room. Seat i does not sit at furniture i -
+ * seat 1 (art 25.8,71) belongs to furniture 2c (27.9,70), seat 6 to 1a, etc.
+ * Pairing by proximity (verified against W17ant's main-office data):
+ *   seat 1->2c  2->2b  3->2a  4->1c  5->1b  6->1a
+ *   seat 7->3c  8->3b  9->3a  10->3d
+ * Rendered desks MUST use this mapping or agents stand on bare floor next to
+ * "empty" desks (the bug the operator photographed).
+ */
+export const SEAT_TO_DESK_INDEX: readonly number[] = [
+  5, 4, 3, 2, 1, 0, 8, 7, 6, 9,
+];
+
 export const DESKS: DeskFurniture[] = (
   [
     { k: "left-rear", p: [42.4, 50.4] },

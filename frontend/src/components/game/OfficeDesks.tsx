@@ -17,6 +17,7 @@ import {
   DESKS,
   BOSS_DESK,
   PINNED_DESKS,
+  SEAT_TO_DESK_INDEX,
   deskSpritePath,
   deskSpriteHeight,
   type DeskFurniture,
@@ -68,11 +69,13 @@ export function DeskCluster({
 }): ReactNode {
   return (
     <>
-      {DESKS.map((desk, i) =>
-        occupied.has(i + 1) ? (
-          <DeskSprite key={`desk-${i}`} desk={desk} />
-        ) : null,
-      )}
+      {DESKS.map((desk, i) => {
+        if (!occupied.has(i + 1)) return null;
+        // Seat i+1 sits at a SPECIFIC furniture desk (seat/furniture orderings
+        // differ - see SEAT_TO_DESK_INDEX).
+        const paired = DESKS[SEAT_TO_DESK_INDEX[i]] ?? desk;
+        return <DeskSprite key={`desk-${i}`} desk={paired} />;
+      })}
     </>
   );
 }
