@@ -30,17 +30,23 @@ export interface RenderAssetState {
   timeoutFired: boolean;
 }
 
-/** Derive renderer kind from a resolved Pixi Application renderer object. */
+/** Derive renderer kind from a resolved Pixi Application renderer object.
+ * Reads the live object only (never canvas probing). Member duck-typing
+ * comes first because production minification renames class constructors.
+ */
 export function normalizeRendererType(renderer: unknown): Exclude<RendererKind, null> {
   if (!renderer || typeof renderer !== "object") return "unknown";
-  const t = (renderer as { type?: unknown }).type;
+  const rec = renderer as Record<string, unknown>;
+  // Pixi v8 WebGLRenderer carries the GL context as `.gl`.
+  if ("gl" in rec && rec.gl) return "webgl";
+  const t = rec.type;
   if (typeof t === "string") {
     const lowered = t.toLowerCase();
     if (lowered.includes("webgl")) return "webgl";
     if (lowered.includes("webgpu")) return "webgpu";
   }
-  const ctorName = (renderer as { constructor?: { name?: unknown } })
-    .constructor?.name;
+  const ctorName = (rec as { constructor?: { name?: unknown } }).constructor
+    ?.name;
   if (typeof ctorName === "string") {
     if (/webgl/i.test(ctorName)) return "webgl";
     if (/webgpu/i.test(ctorName)) return "webgpu";

@@ -25,6 +25,10 @@ describe("normalizeRendererType", () => {
     );
   });
 
+  it("prefers the live GL context member (minification-safe)", () => {
+    expect(normalizeRendererType({ gl: {} })).toBe("webgl");
+  });
+
   it("returns unknown (never null) for unrecognized renderers", () => {
     expect(normalizeRendererType({ constructor: { name: "CanvasRenderer" } })).toBe(
       "unknown",
