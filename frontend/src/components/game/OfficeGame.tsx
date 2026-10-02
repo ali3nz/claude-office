@@ -412,6 +412,7 @@ export function OfficeGame(): ReactNode {
               rendererPresent={rendererPresent}
               appInstanceId={appInstanceId}
               lcEvents={lcEvents}
+              gateOpen={spritesLoaded}
               assets={{
                 spritesLoaded,
                 texturesLoaded,

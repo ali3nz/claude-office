@@ -63,6 +63,9 @@ interface RenderStatusProps {
   rendererPresent?: boolean | null;
   /** Owning OfficeGame mount instance (remount churn diagnosis). */
   appInstanceId?: number | null;
+  /** Whether the spritesLoaded gate is open (COMPLETES the approved
+   * diagnostic surface: counters alone cannot show a stuck gate). */
+  gateOpen?: boolean | null;
   /** Ordered lifecycle lines, newest last (diagnosis only). */
   lcEvents?: string[];
   assets: RenderAssetState;
@@ -75,6 +78,7 @@ function RenderStatusComponent({
   rendererPresent = null,
   appInstanceId = null,
   lcEvents = [],
+  gateOpen = null,
   assets,
   buildCommit,
 }: RenderStatusProps): ReactNode {
@@ -117,7 +121,9 @@ function RenderStatusComponent({
     >
       <div className="px-2 py-1 rounded bg-slate-900/85 border border-slate-700 text-slate-300">
         {dot} {summary}
-        {appInstanceId != null ? ` · app#${appInstanceId}` : ""} · assets{" "}
+        {appInstanceId != null ? ` · app#${appInstanceId}` : ""} · gate:
+        {gateOpen == null ? "?" : gateOpen ? "open" : "SHUT"}
+        {assets.timeoutFired ? " · TIMEOUT" : ""} · assets{" "}
         {assets.texturesLoaded}/{assets.texturesLoaded + assets.texturesFailed}
         {assets.timeoutFired ? " · ASSET-TIMEOUT" : ""} · {buildCommit}
       </div>
