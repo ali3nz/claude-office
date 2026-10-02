@@ -277,17 +277,32 @@ const DEPARTING_PHASES = new Set([
   "in_elevator",
 ]);
 
+/**
+ * Display position (issue 226): a settled agent (idle at its desk) is ALWAYS
+ * drawn at its assigned workstation seat, so nobody can be left standing off
+ * the floor by a stale animation position. Agents still walking/arriving keep
+ * their animated position.
+ */
+function agentDisplayPosition(agent: {
+  phase: string;
+  desk?: number | null;
+  currentPosition: { x: number; y: number };
+}): { x: number; y: number } {
+  if (agent.phase === "idle" && agent.desk) {
+    return getSpotForDesk(agent.desk).position;
+  }
+  return agent.currentPosition;
+}
+
+/** Only agents on the room floor are drawn (departures and strays hidden). */
 function isVisibleAgent(agent: {
   phase: string;
   currentPosition: { x: number; y: number };
 }): boolean {
   if (DEPARTING_PHASES.has(agent.phase)) return false;
-  const { x, y } = agent.currentPosition;
-  // Hide only the old off-floor departure column (far right / below the room).
-  // Agents that have not been placed yet legitimately sit at/near the origin,
-  // so never hide those.
-  if (x > 1150 || y > 1010) return false;
-  return true;
+  const p = agentDisplayPosition(agent);
+  // Room floor bounds; unplaced agents at/near the origin are hidden too.
+  return p.x >= 150 && p.x <= 1140 && p.y >= 380 && p.y <= 930;
 }
 
 // Issue 226 R3/R4: display-only movement group. Reads the behavior engine's
@@ -770,10 +785,10 @@ export function OfficeGame(): ReactNode {
                         <BehaviorGroup
                           key={agent.id}
                           id={agent.id}
-                          baseX={agent.currentPosition.x}
-                          baseY={agent.currentPosition.y}
+                          baseX={agentDisplayPosition(agent).x}
+                          baseY={agentDisplayPosition(agent).y}
                           zIndex={
-                            agent.currentPosition.y +
+                            agentDisplayPosition(agent).y +
                             (agent.phase === "idle" ? 60 : 0)
                           }
                         >
@@ -782,7 +797,7 @@ export function OfficeGame(): ReactNode {
                             name={agent.name}
                             color={agent.color}
                             number={agent.number}
-                            position={agent.currentPosition}
+                            position={agentDisplayPosition(agent)}
                             phase={agent.phase}
                             bubble={agent.bubble.content}
                             headsetTexture={textures.headset}
@@ -913,8 +928,8 @@ export function OfficeGame(): ReactNode {
                       <BehaviorGroup
                         key={`label-${agent.id}`}
                         id={agent.id}
-                        baseX={agent.currentPosition.x}
-                        baseY={agent.currentPosition.y}
+                        baseX={agentDisplayPosition(agent).x}
+                        baseY={agentDisplayPosition(agent).y}
                       >
                         <AgentLabel name={agent.name!} position={{ x: 0, y: 0 }} />
                       </BehaviorGroup>
@@ -999,8 +1014,8 @@ export function OfficeGame(): ReactNode {
                       <BehaviorGroup
                         key={`bubble-${agent.id}`}
                         id={agent.id}
-                        baseX={agent.currentPosition.x}
-                        baseY={agent.currentPosition.y}
+                        baseX={agentDisplayPosition(agent).x}
+                        baseY={agentDisplayPosition(agent).y}
                       >
                         <AgentBubble
                           content={agent.bubble.content!}
