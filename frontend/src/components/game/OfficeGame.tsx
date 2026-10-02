@@ -387,12 +387,18 @@ function seatFacingFor(agent: {
 /** Only agents on the room floor are drawn (departures and strays hidden). */
 function isVisibleAgent(agent: {
   phase: string;
+  name?: string | null;
+  desk?: number | null;
   currentPosition: { x: number; y: number };
 }): boolean {
   if (DEPARTING_PHASES.has(agent.phase)) return false;
+  // Sol gateway corner workstations sit outside the main floor box on purpose.
+  if (agent.name && SOL_SEATS[agent.name]) return true;
+  // Agents with a desk are seated at a known-good workstation by construction
+  // (issue 226 R5: this must actually SKIP the region test, or seats outside
+  // the box - e.g. the Sol corners - are hidden).
+  if (agent.desk) return true;
   const p = agentDisplayPosition(agent);
-  // Agents with a desk are seated at a known-good workstation by construction.
-  // Only desk-less agents need the region test (hidden if off the floor).
   return p.x >= 280 && p.x <= 1000 && p.y >= 400 && p.y <= 850;
 }
 
