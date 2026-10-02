@@ -508,7 +508,14 @@ export function OfficeGame(): ReactNode {
   // already has (no new authoritative source): consult agents walk to a Sol
   // gateway character; idle agents take coffee/water breaks; everyone else
   // stays at their workstation. Presentation only.
+  const DISABLE_WANDER = true; // wandering paused: offset model needs fixing
   useEffect(() => {
+    if (DISABLE_WANDER) {
+      for (const a of agents.values()) {
+        setBehavior(a.id, { mode: "seat", seat: a.currentPosition, target: null });
+      }
+      return;
+    }
     const list = Array.from(agents.values());
     const sols = list.filter(
       (a) => a.name === "Sol Docker" || a.name === "Sol Webserver",
