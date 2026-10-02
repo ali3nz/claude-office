@@ -920,7 +920,14 @@ export function OfficeGame(): ReactNode {
                   <pixiContainer sortableChildren={true}>
                     {/* W17ant workstations (desks with computers), z-sorted with agents */}
                     {W17ANT_CAST_MODE && (
-                      <DeskCluster occupied={occupiedDeskNumbers} />
+                      <>
+                        <DeskCluster occupied={occupiedDeskNumbers} />
+                        {/* Issue 226 R5: boss + pinned desks live INSIDE the
+                            y-sorted layer (they used to render after it, so
+                            they drew over their own occupants). */}
+                        <SolDesks present={presentPinned} />
+                        {presentPinned.has("Sol Docker") && <BossDesk />}
+                      </>
                     )}
                     {/* Desk chairs (legacy theme; the DM art has its own desks) */}
                     {!W17ANT_CAST_MODE &&
@@ -1034,11 +1041,8 @@ export function OfficeGame(): ReactNode {
                     />
                   )}
 
-                  {/* Boss desk (W17ant workstation, drawn behind the boss) */}
-                  {W17ANT_CAST_MODE && <BossDesk />}
-
-                  {/* Persistent-identity workstations (issue 226 R5) */}
-                  {W17ANT_CAST_MODE && <SolDesks present={presentPinned} />}
+                  {/* Boss + pinned desks now render INSIDE the y-sorted
+                      layer (issue 226 R5) - see DeskCluster above. */}
 
                   {/* Boss character removed (issue 226): only real agents
                       appear on the floor. His workstation stays as furniture. */}
