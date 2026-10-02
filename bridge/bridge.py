@@ -32,6 +32,31 @@ FEED_OC = os.environ.get("CO_FEED_OC", "/feeds/openchamber.jsonl")
 FEED_FB = os.environ.get("CO_FEED_FB", "/feeds/claude.jsonl")
 FEED_AG = os.environ.get("CO_FEED_AG", "/feeds/agdir/events.jsonl")
 
+# ai-agents stack (issue 226): the operator's two persistent self-learning
+# agents are ALWAYS on the office floor. They have no chat/session source; their
+# displayed cycle is derived read-only from their own state directories.
+AI_ROOT = os.environ.get("CO_FEED_AI", "/feeds/aidir")
+AI_AGENTS = (
+    {
+        "sid": "ai-companion",
+        "agent_id": "ai-companion",
+        "agent_type": "ai-companion",
+        "name": "GhostReporting",
+        "root": "companion",
+        "mirror": True,
+    },
+    {
+        "sid": "ai-explorer",
+        "agent_id": "ai-explorer",
+        "agent_type": "ai-explorer",
+        "name": "TruFreedom",
+        "root": "explorer",
+        "mirror": False,
+    },
+)
+AI_CYCLE_WINDOW_S = 1800  # a cycle counts as active for 30 min after activity
+AI_MIRROR_WINDOW_S = 360  # the mirror timer runs every 5 min
+
 # Pixel-Agents parity (issue 221 S3): exactly TWO persistent catgpt gateway
 # characters are surfaced from the agenthome feed. This is a fixed whitelist —
 # session id -> (agent id, display name, curated agent type). Every other
@@ -346,6 +371,98 @@ def translate_gateway(line, seen=None):
     return (envs if len(envs) != 1 else envs[0]), key, sid
 
 
+def _newest_mtime(paths):
+    """Newest mtime among files/dirs (one level deep, bounded, read-only)."""
+    newest = 0.0
+    for path in paths:
+        try:
+            if os.path.isdir(path):
+                for name in os.listdir(path):
+                    if name == ".git":
+                        continue
+                    try:
+                        newest = max(newest, os.path.getmtime(os.path.join(path, name)))
+                    except OSError:
+                        continue
+            else:
+                newest = max(newest, os.path.getmtime(path))
+        except OSError:
+            continue
+    return newest
+
+
+def ai_agent_cycle(spec):
+    """Current displayed cycle for one ai-agents character (freshness-based)."""
+    root = os.path.join(AI_ROOT, spec["root"])
+    now = time.time()
+    checks = [
+        ("dreaming", [os.path.join(root, "dreams")], AI_CYCLE_WINDOW_S),
+        ("exploring", [os.path.join(root, "explore")], AI_CYCLE_WINDOW_S),
+        ("updating wiki", [os.path.join(root, "wiki")], AI_CYCLE_WINDOW_S),
+        (
+            "reporting",
+            [os.path.join(AI_ROOT, "reports", "2026-10-02-%s.json" % spec["root"])],
+            AI_CYCLE_WINDOW_S,
+        ),
+    ]
+    if spec.get("mirror"):
+        checks.append(("mirroring", [os.path.join(root, "current-state")], AI_MIRROR_WINDOW_S))
+    for label, paths, window in checks:
+        newest = _newest_mtime(paths)
+        if newest and (now - newest) <= window:
+            return label
+    return "idle"
+
+
+def run_ai_agents(state):
+    """Keep the two persistent ai-agents characters on the floor + show cycles.
+
+    Bootstrap is idempotent per agent (tracked in bridge state). Cycle changes
+    post a working event (pre_tool_use, tool_name = cycle) or an idle event.
+    Never writes anywhere: read-only over the ai-agents state directories.
+    """
+    posted = 0
+    failed = 0
+    seen = state.setdefault("aiagents", {})
+    for spec in AI_AGENTS:
+        sid = spec["sid"]
+        label = ai_agent_cycle(spec)
+        first = sid not in seen
+        if first:
+            base = {"agent_id": spec["agent_id"], "project_dir": "/orchestra/ai-agents"}
+            for env in (
+                {"session_id": sid, "timestamp": iso_from_ts(time.time()),
+                 "event_type": "session_start",
+                 "data": dict(base, agent_name=spec["name"], reason="persistent agent")},
+                {"session_id": sid, "timestamp": iso_from_ts(time.time()),
+                 "event_type": "subagent_start",
+                 "data": dict(base, agent_name=spec["name"],
+                              agent_type=spec["agent_type"],
+                              task_description="persistent self-learning agent")},
+            ):
+                if post_envelope(env):
+                    posted += 1
+                else:
+                    failed += 1
+        last = seen.get(sid)
+        if first or last != label:
+            seen[sid] = label
+            base = {"agent_id": spec["agent_id"], "project_dir": "/orchestra/ai-agents"}
+            if label == "idle":
+                env = {"session_id": sid, "timestamp": iso_from_ts(time.time()),
+                       "event_type": "post_tool_use",
+                       "data": dict(base, tool_name="idle", success=True)}
+            else:
+                env = {"session_id": sid, "timestamp": iso_from_ts(time.time()),
+                       "event_type": "pre_tool_use",
+                       "data": dict(base, tool_name=label)}
+            if post_envelope(env):
+                posted += 1
+            else:
+                failed += 1
+    return posted, failed
+
+
 def post_envelope(envelope):
     payload = json.dumps(envelope).encode("utf-8")
     headers = {"Content-Type": "application/json"}
@@ -509,6 +626,12 @@ def run_once(state):
         state["cursors"][path] = advanced
     state["sent"] = list(sent_set)[-SENT_CAP:]
     state["live"] = live
+
+    # Persistent ai-agents characters (issue 226): always on, real cycles.
+    ai_posted, ai_failed = run_ai_agents(state)
+    posted += ai_posted
+    failed += ai_failed
+
     return posted, skipped, failed
 
 

@@ -28,6 +28,7 @@ services:
       - CO_FEED_OC=/feeds/ocdir/events.jsonl
       - CO_FEED_FB=/feeds/fbdir/events.jsonl
       - CO_FEED_AG=/feeds/agdir/events.jsonl
+      - CO_FEED_AI=/feeds/aidir
       - CO_START_AT_END=1
       - CO_POLL_SEC=5
     volumes:
@@ -36,6 +37,7 @@ services:
       - /home/ali3nz/docker/openchamber/data/pixel-office:/feeds/ocdir:ro
       - /home/ali3nz/docker/freebuff/workspace/.freebuff/pixel-office:/feeds/fbdir:ro
       - /home/ali3nz/docker/agenthome/data/events:/feeds/agdir:ro
+      - /home/ali3nz/docker/ai-agents:/feeds/aidir:ro
       - co-bridge-state:/state
     networks:
       - default

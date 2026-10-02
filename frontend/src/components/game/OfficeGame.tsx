@@ -614,25 +614,8 @@ export function OfficeGame(): ReactNode {
                     </>
                   )}
 
-                  {/* Elevator with animated doors and agents inside */}
-                  <CoErrorBoundary label="elev">
-                    <Elevator
-                      isOpen={isElevatorOpen}
-                      agents={agents}
-                      frameTexture={textures.elevatorFrame}
-                      doorTexture={textures.elevatorDoor}
-                      headsetTexture={textures.headset}
-                      sunglassesTexture={textures.sunglasses}
-                    />
-
-                    {/* Floor sign above elevator */}
-                    {floor && (
-                      <FloorSign
-                        label={`${floor.icon} ${floor.name}`}
-                        accent={floor.accent}
-                      />
-                    )}
-                  </CoErrorBoundary>
+                  {/* Elevator art + floor sign removed (issue 226): they sat
+                      oddly on the DM wall. Arrival/departure logic is unchanged. */}
 
                   {/* Y-sorted layer: chairs and agents sorted by Y position (higher Y = in front) */}
                   <CoErrorBoundary label="ysort">
@@ -760,37 +743,10 @@ export function OfficeGame(): ReactNode {
                   {/* Boss desk (W17ant workstation, drawn behind the boss) */}
                   {W17ANT_CAST_MODE && <BossDesk />}
 
-                  {/* Boss */}
-                  <CoErrorBoundary label="boss">
-                    <BossSprite
-                      position={boss.position}
-                      state={boss.backendState}
-                      bubble={boss.bubble.content}
-                      inUseBy={boss.inUseBy}
-                      currentTask={boss.currentTask}
-                      chairTexture={textures.chair}
-                      deskTexture={textures.desk}
-                      keyboardTexture={textures.keyboard}
-                      monitorTexture={textures.monitor}
-                      phoneTexture={textures.phone}
-                      headsetTexture={textures.headset}
-                      sunglassesTexture={textures.sunglasses}
-                      renderBubble={false}
-                      isTyping={boss.isTyping}
-                      isAway={compactionAnimation.phase !== "idle"}
-                    />
-                  </CoErrorBoundary>
+                  {/* Boss character removed (issue 226): only real agents
+                      appear on the floor. His workstation stays as furniture. */}
 
-                  {/* Mobile Boss (when walking to/from trash can) */}
-                  {compactionAnimation.bossPosition && (
-                    <MobileBoss
-                      position={compactionAnimation.bossPosition}
-                      jumpOffset={compactionAnimation.jumpOffset}
-                      scale={compactionAnimation.bossScale}
-                      sunglassesTexture={null}
-                      headsetTexture={null}
-                    />
-                  )}
+                  {/* Mobile boss removed (issue 226): not a real agent. */}
 
                   {/* Trash Can (Context Utilization Indicator) - follows boss desk */}
                   <CoErrorBoundary label="trash">
@@ -932,11 +888,7 @@ export function OfficeGame(): ReactNode {
                         />
                       </pixiContainer>
                     ))}
-                  {boss.bubble.content && (
-                    <pixiContainer x={boss.position.x} y={boss.position.y}>
-                      <BossBubble content={boss.bubble.content} yOffset={-80} />
-                    </pixiContainer>
-                  )}
+                  {/* Boss bubble removed with the boss character (issue 226). */}
                   </>
                 </CoErrorBoundary>
               )}

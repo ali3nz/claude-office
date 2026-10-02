@@ -69,6 +69,9 @@ class SummaryService:
         # by the AI summary path (mapped types short-circuit it).
         "gateway-dockerhost": ["Sol Docker"],
         "gateway-webserver": ["Sol Webserver"],
+        # Persistent self-learning agents (issue 226): fixed identities.
+        "ai-companion": ["GhostReporting"],
+        "ai-explorer": ["TruFreedom"],
     }
     _MAPPED_AGENT_TYPES: frozenset[str] = frozenset(_AGENT_TYPE_NAMES.keys())
 
