@@ -38,6 +38,10 @@ def _sanitize_untrusted(text: str) -> str:
     return text.replace(_UNTRUSTED_START, "").replace(_UNTRUSTED_END, "")
 
 
+# Fixed-identity gateway character names (issue 221), module-level alias.
+GATEWAY_AGENT_NAMES: frozenset[str] = frozenset({"Sol Docker", "Sol Webserver"})
+
+
 class SummaryService:
     """Service for generating AI-powered summaries using Claude Haiku."""
 
@@ -59,8 +63,19 @@ class SummaryService:
         "fix-documentation": ["Doc Brown", "The Scribe", "Note Taker"],
         "markdown-docs-writer": ["The Scribe", "Doc Brown", "Word Wizard"],
         "webgl-shader-expert": ["Pixel Pete", "Shader Sam", "GPU Guru"],
+        # Fixed-identity gateway presence characters (issue 221). Single-name
+        # lists keep these deterministic: the two catgpt gateways keep their
+        # exact names ("Sol Docker" / "Sol Webserver") and are never renamed
+        # by the AI summary path (mapped types short-circuit it).
+        "gateway-dockerhost": ["Sol Docker"],
+        "gateway-webserver": ["Sol Webserver"],
     }
     _MAPPED_AGENT_TYPES: frozenset[str] = frozenset(_AGENT_TYPE_NAMES.keys())
+
+    # Names of the fixed-identity gateway characters (issue 221).
+    GATEWAY_AGENT_NAMES: frozenset[str] = frozenset(
+        {"Sol Docker", "Sol Webserver"}
+    )
 
     def __init__(self) -> None:
         """Initialize the summary service with the configured backend.

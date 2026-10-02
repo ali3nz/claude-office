@@ -8,6 +8,7 @@
  */
 
 import type { Position } from "@/types";
+import { BOSS_RUG_POSITION } from "@/constants/positions";
 import type { OfficeFacing } from "@/themes/w17ant-cast";
 
 const ART_WIDTH = 1200;
@@ -151,15 +152,17 @@ export const DESKS: DeskFurniture[] = (
 }));
 
 /**
- * Boss workstation: one additional desk (not present in W17ant's main-office
- * furniture list) placed so Michael sits behind it, mirroring the spot→desk
- * relationship of the front desk cluster (desk bottom edge ≈ 50 canvas px
- * below the seated agent's feet).
+ * Boss workstation: one additional desk (not part of W17ant's main-office
+ * furniture list). The boss's runtime home is the legacy store default
+ * BOSS_POSITION (640, 900) — his sprite never moves to the art-space
+ * BOSS_SPOT — so the desk is placed just BEHIND him (bottom edge above his
+ * feet), which reads as "Michael behind his desk" and keeps the departure
+ * queue's final position (640, 940) in front of the desk, unblocked.
  */
 export const BOSS_DESK: DeskFurniture = {
   kind: "right-front",
-  position: artToCanvas(
-    (0.735 * ART_WIDTH) - 25,
-    (0.615 * ART_HEIGHT) + 44,
-  ),
+  position: {
+    x: BOSS_RUG_POSITION.x,
+    y: BOSS_RUG_POSITION.y - 54, // 886 = boss feet (900) − 14
+  },
 };

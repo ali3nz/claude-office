@@ -8,7 +8,7 @@ from typing import Any, cast
 
 from app.core.path_utils import compress_path, compress_paths_in_text, truncate_long_words
 from app.core.quotes import get_random_job_completion_quote
-from app.core.summary_service import get_summary_service
+from app.core.summary_service import GATEWAY_AGENT_NAMES, get_summary_service
 from app.core.token_tracker import TokenTracker
 from app.core.whiteboard_tracker import WhiteboardTracker
 from app.models.agents import (
@@ -315,6 +315,11 @@ def _handle_post_tool_use(sm: "StateMachine", event: AnyEvent) -> None:
         sm.boss_state = BossState.IDLE
     elif agent_id in sm.agents and sm.agents[agent_id].state == AgentState.WAITING_PERMISSION:
         sm.agents[agent_id].state = AgentState.WORKING
+    elif agent_id in sm.agents and sm.agents[agent_id].name in GATEWAY_AGENT_NAMES:
+        # Gateway presence characters (issue 221) have no follow-up work after
+        # a pulse: return them to the carried idle presence so the floor shows
+        # idle -> working -> idle like the Pixel Agents office.
+        sm.agents[agent_id].state = AgentState.IDLE
 
     sm.tool_uses_since_compaction += 1
     sm.whiteboard.track_tool_use(event)

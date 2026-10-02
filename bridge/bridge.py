@@ -29,6 +29,26 @@ SENT_CAP = int(os.environ.get("CO_SENT_CAP", "20000"))
 FEED_KIT = os.environ.get("CO_FEED_KIT", "/feeds/kit.jsonl")
 FEED_OC = os.environ.get("CO_FEED_OC", "/feeds/openchamber.jsonl")
 FEED_FB = os.environ.get("CO_FEED_FB", "/feeds/claude.jsonl")
+FEED_AG = os.environ.get("CO_FEED_AG", "/feeds/agdir/events.jsonl")
+
+# Pixel-Agents parity (issue 221 S3): exactly TWO persistent catgpt gateway
+# characters are surfaced from the agenthome feed. This is a fixed whitelist —
+# session id -> (agent id, display name, curated agent type). Every other
+# agenthome session is ignored, and NO free text from the feed crosses this
+# boundary (only the fixed strings below are emitted).
+GATEWAY_WHITELIST = {
+    "agentchat-sol-dockerhost": {
+        "agent_id": "gateway-dockerhost",
+        "name": "Sol Docker",
+        "agent_type": "gateway-dockerhost",
+    },
+    "agentchat-sol-webserver": {
+        "agent_id": "gateway-webserver",
+        "name": "Sol Webserver",
+        "agent_type": "gateway-webserver",
+    },
+}
+GATEWAY_EVENTS = frozenset(["session_start", "tool_start", "tool_end"])
 
 STATE_FILE = os.path.join(STATE_DIR, "bridge-state.json")
 
@@ -256,6 +276,42 @@ def translate_vocab(line, source, prefix, live_agents):
     return None, key, sid
 
 
+def translate_gateway(line):
+    """Narrow agenthome -> gateway-character translation (issue 221 S3).
+
+    Only the two whitelisted catgpt gateway sessions are accepted; only the
+    lifecycle vocabulary needed for presence (session_start) and working state
+    (tool_start/tool_end) is translated; the agent identity/name/type are the
+    fixed whitelist values, so no feed free text is propagated.
+    """
+    if not isinstance(line, dict) or "event" not in line:
+        return None, None, None
+    raw_sid = str(line.get("session_id") or "x")
+    meta = GATEWAY_WHITELIST.get(raw_sid)
+    if meta is None:
+        return None, None, None
+    event = line.get("event")
+    if event not in GATEWAY_EVENTS:
+        return None, None, None
+    sid = sanitize_sid("ag-" + raw_sid)
+    key = dedup_key("ag", raw_sid, event, line.get("ts"))
+    stamp = iso_from_ts(line.get("ts"))
+    data = {"agent_id": meta["agent_id"], "project_dir": "/orchestra/gateway"}
+    if event == "session_start":
+        data.update({"agent_name": meta["name"], "agent_type": meta["agent_type"],
+                     "task_description": "catgpt gateway"})
+        return {"session_id": sid, "timestamp": stamp,
+                "event_type": "subagent_start", "data": data}, key, sid
+    if event == "tool_start":
+        data.update({"tool_name": "catgpt-gateway"})
+        return {"session_id": sid, "timestamp": stamp,
+                "event_type": "pre_tool_use", "data": data}, key, sid
+    activity = str(line.get("activity") or "")
+    data.update({"tool_name": "catgpt-gateway", "success": activity != "blocked"})
+    return {"session_id": sid, "timestamp": stamp,
+            "event_type": "post_tool_use", "data": data}, key, sid
+
+
 def post_envelope(envelope):
     payload = json.dumps(envelope).encode("utf-8")
     headers = {"Content-Type": "application/json"}
@@ -292,7 +348,7 @@ def load_state():
 def fresh_state():
     state = {"cursors": {}, "sent": [], "live": {}}
     if START_AT_END:
-        for path in (FEED_KIT, FEED_OC, FEED_FB):
+        for path in (FEED_KIT, FEED_OC, FEED_FB, FEED_AG):
             try:
                 with open(path, encoding="utf-8") as fh:
                     state["cursors"][path] = sum(1 for _ in fh)
@@ -332,7 +388,8 @@ def run_once(state):
         if agent:
             live_agents[agent] = sid
     posted = skipped = failed = 0
-    for path, source in ((FEED_KIT, "kit"), (FEED_OC, "oc"), (FEED_FB, "fb")):
+    for path, source in ((FEED_KIT, "kit"), (FEED_OC, "oc"),
+                        (FEED_FB, "fb"), (FEED_AG, "ag")):
         consumed = int(state["cursors"].get(path, 0))
         fresh, _ = read_new_lines(path, consumed)
         advanced = consumed
@@ -344,6 +401,8 @@ def run_once(state):
                 continue
             if source == "kit":
                 env, key, sid = translate_kit(item, live)
+            elif source == "ag":
+                env, key, sid = translate_gateway(item)
             else:
                 prefix = "oc-" if source == "oc" else "fb-"
                 env, key, sid = translate_vocab(item, source, prefix, live_agents)
@@ -432,7 +491,40 @@ def selftest():
     assert department_for("WORKER", "freebuff", "VALIDATING", "VALIDATION", "x") == "validation"
     assert department_for("WORKER", "freebuff", "IDLE", "x", "x") == "lounge"
     assert department_for("WORKER", "freebuff", "IMPLEMENTING", "IMPLEMENT", "x") == "implementation"
-    print("selftest: 5 groups OK")
+    # --- gateway whitelist (issue 221 S3) -------------------------------
+    gw = {"session_id": "agentchat-sol-webserver", "platform": "cli",
+          "ts": 1790831906.0, "event": "session_start",
+          "label": "SECRET-LABEL", "detail": "in use by SECRET-USER",
+          "preview": "SECRET-PREVIEW"}
+    env5, key5, sid5 = translate_gateway(gw)
+    assert env5 is not None and key5 is not None, (env5, key5)
+    assert env5["event_type"] == "subagent_start", env5
+    assert sid5 == "ag-agentchat-sol-webserver", sid5
+    assert env5["data"]["agent_id"] == "gateway-webserver", env5
+    assert env5["data"]["agent_name"] == "Sol Webserver", env5
+    assert env5["data"]["agent_type"] == "gateway-webserver", env5
+    blob = json.dumps(env5)
+    assert "SECRET" not in blob, blob
+    gw2 = {"session_id": "agentchat-sol-dockerhost", "platform": "cli",
+           "ts": 1790831907.0, "event": "tool_start", "activity": "working",
+           "detail": "in use by sol-x", "preview": "SECRET-PREVIEW"}
+    env6, _, _ = translate_gateway(gw2)
+    assert env6["event_type"] == "pre_tool_use", env6
+    assert env6["data"]["agent_id"] == "gateway-dockerhost", env6
+    assert "SECRET" not in json.dumps(env6), env6
+    gw3 = {"session_id": "agentchat-sol-dockerhost", "platform": "cli",
+           "ts": 1790831908.0, "event": "tool_end", "activity": "idle",
+           "detail": "available"}
+    env7, _, _ = translate_gateway(gw3)
+    assert env7["event_type"] == "post_tool_use", env7
+    assert env7["data"]["success"] is True, env7
+    # unrelated agenthome sessions are rejected outright
+    for sid in ("orch-042-sol-1", "agentchat-buffy", "some-other"):
+        other = {"session_id": sid, "platform": "orchestra-sol",
+                 "ts": 1790831909.0, "event": "tool_start"}
+        envX, keyX, sidX = translate_gateway(other)
+        assert envX is None and keyX is None and sidX is None, (sid, envX, keyX, sidX)
+    print("selftest: 6 groups OK")
     return 0
 
 
