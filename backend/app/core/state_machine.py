@@ -211,6 +211,15 @@ def parse_todos_from_event(event: AnyEvent) -> list[TodoItem]:
 
 
 def _handle_session_start(sm: "StateMachine", event: AnyEvent) -> None:
+    # Presentation naming (issue 226 R1): keep the latest bounded title.
+    data = getattr(event, "data", None)
+    if data is not None:
+        name = getattr(data, "display_name", None)
+        if name:
+            sm.display_name = str(name)[:40]
+        parent = getattr(data, "parent_session_id", None)
+        if parent:
+            sm.parent_session_id = str(parent)[:64]
     """Handle SESSION_START: initialize office state for a new session."""
     sm.phase = OfficePhase.STARTING
     sm.boss_state = BossState.IDLE
@@ -584,6 +593,9 @@ class StateMachine:
     # Floor/room assignment for multi-floor building navigation
     floor_id: str | None = None
     room_id: str | None = None
+    # Presentation naming (issue 226 R1): bounded session title + parent link.
+    display_name: str | None = None
+    parent_session_id: str | None = None
 
     # Agent Teams support (used by RoomOrchestrator)
     is_lead: bool = True

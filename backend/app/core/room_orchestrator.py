@@ -26,7 +26,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 # Colors assigned to teammates in order of arrival (index 0 = first teammate)
-# Single merged office floor (issue 221, operator directive 2026-10-02):
+# Single merged office floor (issue 225, operator directive 2026-10-02):
 # every real session/agent is rendered in ONE office. Desk allocation is
 # deterministic (insertion order) and capped at the W17ant workstation count;
 # overflow stays in the sidebar but off the floor (no wrap, no collisions).
@@ -36,19 +36,43 @@ OFFICE_MAX_SEATED = 10  # number of W17ant workstations on the DM floor
 _RUN_ID_RE = re.compile(r"^orch-(\d{1,4})-([a-z]+)")
 
 
-def office_session_name(session_id: str) -> str:
-    """Deterministic, human-readable floor name for an agent-less session."""
+GATEWAY_NAMES = {
+    "agentchat-sol-dockerhost": "Sol Docker",
+    "agentchat-sol-webserver": "Sol Webserver",
+}
+
+
+def _first10(text: str) -> str:
+    """First 10 characters (Python slicing is code-point safe, issue 226 R1)."""
+    return str(text or "")[:10]
+
+
+def office_session_name(session_id: str, display_name: str | None = None) -> str:
+    """Floor name for a session character.
+
+    Issue 226 R1: the operator wants the first 10 characters of the
+    conversation name; gateway characters keep their exact fixed names;
+    untitled sessions keep the deterministic fallback.
+    """
     sid = str(session_id or "")
-    if "agentchat-sol-dockerhost" in sid:
-        return "Sol Docker"
-    if "agentchat-sol-webserver" in sid:
-        return "Sol Webserver"
+    for key, fixed in GATEWAY_NAMES.items():
+        if key in sid:
+            return fixed
+    title = _first10(display_name)
+    if title.strip():
+        return title
     m = _RUN_ID_RE.match(sid)
     if m:
         return f"Run {m.group(1)} {m.group(2).title()}"[:24]
     if sid.startswith("oc-"):
         return "OpenChamber " + sid[-4:]
     return sid[:16] or "Agent"
+
+
+def office_subagent_name(session_id: str, display_name: str | None) -> str:
+    """Subagent character name: 'sub-' + first 10 of the conversation name."""
+    base = office_session_name(session_id, display_name)
+    return f"sub-{base}"[:24]
 
 
 _TEAMMATE_COLORS = [
@@ -198,7 +222,7 @@ class RoomOrchestrator:
         return self._merge_team(lead_entry, lead_state)
 
     # ------------------------------------------------------------------
-    # Merged office floor (issue 221, operator directive)
+    # Merged office floor (issue 225, operator directive)
     # ------------------------------------------------------------------
 
     def _merge_office(self) -> GameState | None:
@@ -220,18 +244,26 @@ class RoomOrchestrator:
                 break
             state = entry.sm.to_game_state(session_id)
             session_agents = list(state.agents)
+            is_gateway = any(k in session_id for k in GATEWAY_NAMES)
             if session_agents:
                 for agent in session_agents:
                     if seated >= OFFICE_MAX_SEATED:
                         break
                     seated += 1
+                    # Issue 226 R1: subagent characters are named
+                    # 'sub-<conversation name>' unless they are the fixed
+                    # gateway identities.
+                    name = agent.name
+                    if not is_gateway:
+                        name = office_subagent_name(session_id, entry.sm.display_name)
                     merged_agents.append(
                         agent.model_copy(
                             update={
-                                "character_type": "teammate",
+                                "character_type": "subagent",
                                 "parent_session_id": session_id,
                                 "number": seated,
                                 "desk": seated,
+                                "name": name,
                             }
                         )
                     )
@@ -240,7 +272,7 @@ class RoomOrchestrator:
                 merged_agents.append(
                     Agent(
                         id=f"off-{session_id[:10]}",
-                        name=office_session_name(session_id),
+                        name=office_session_name(session_id, entry.sm.display_name),
                         color=_TEAMMATE_COLORS[(seated - 1) % len(_TEAMMATE_COLORS)],
                         number=seated,
                         state=_BOSS_TO_AGENT.get(

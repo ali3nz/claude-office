@@ -662,7 +662,7 @@ class EventProcessor:
             await broadcast_room_state(sm.room_id, orchestrator)
 
         # ------------------------------------------------------------------
-        # Merged office floor (issue 221, operator directive 2026-10-02):
+        # Merged office floor (issue 225, operator directive 2026-10-02):
         # every real session/agent renders in ONE office, independent of its
         # departmental room. Presentation membership only — room attribution
         # above stays truthful.

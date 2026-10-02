@@ -1,5 +1,5 @@
 /**
- * OfficeDesks — W17ant workstations rendered on the DM floor (issue 221).
+ * OfficeDesks — W17ant workstations rendered on the DM floor (issue 225).
  *
  * Draws the 10 artist-placed standing desks from `themes/w17ant-spots.ts`
  * (single geometry source, shared with the agent seat mapping) plus the boss

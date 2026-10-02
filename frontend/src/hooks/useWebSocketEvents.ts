@@ -33,7 +33,7 @@ import type { EventType, WebSocketMessage } from "@/types";
 interface UseWebSocketEventsOptions {
   sessionId: string;
   enabled?: boolean;
-  /** Connect to the merged room feed instead of one session (issue 221). */
+  /** Connect to the merged room feed instead of one session (issue 225). */
   roomId?: string;
 }
 

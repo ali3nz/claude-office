@@ -197,6 +197,10 @@ class EventDataBase(BaseModel):
     # Free-form text fields used across multiple families.
     summary: str | None = None
     message: str | None = None
+    # Presentation naming (issue 226 R1): bounded OpenChamber session title.
+    # Display-only; never parsed or used for routing/behaviour.
+    display_name: str | None = None
+    parent_session_id: str | None = None
     # Agent Teams context (set on session-level events).
     team_name: str | None = None
     teammate_name: str | None = None

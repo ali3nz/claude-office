@@ -9,6 +9,7 @@ only past posted or explicitly skipped lines.
 """
 
 import hashlib
+import re
 import json
 import os
 import sys
@@ -240,6 +241,18 @@ def translate_kit(ev, live):
     return None, key, sid
 
 
+def sanitize_display_name(raw):
+    """Bounded presentation-only title (issue 226 R1, Sol guardrails).
+
+    Source is exclusively the OpenChamber session title: control characters and
+    line breaks stripped, whitespace collapsed/trimmed, capped at 40 chars.
+    Never derived from prompts/messages/tool output; never parsed.
+    """
+    txt = re.sub(r"[\x00-\x1f\x7f]+", " ", str(raw or ""))
+    txt = re.sub(r"\s+", " ", txt).strip()
+    return txt[:40]
+
+
 def translate_vocab(line, source, prefix, live_agents):
     """Map one office-vocab line (openchamber/claude feeds). Strips free text."""
     if not isinstance(line, dict) or "event" not in line:
@@ -270,7 +283,14 @@ def translate_vocab(line, source, prefix, live_agents):
     if event == "approval_request":
         return base("permission_request", {"tool_name": "approval"}), key, sid
     if event == "session_start":
-        return base("session_start", {"reason": "observed"}), key, sid
+        extra = {"reason": "observed"}
+        label = sanitize_display_name(line.get("label"))
+        if label:
+            extra["display_name"] = label
+        parent = str(line.get("parent_session_id") or "").strip()
+        if parent:
+            extra["parent_session_id"] = parent[:64]
+        return base("session_start", extra), key, sid
     if event == "session_end":
         return base("session_end", {"reason": "observed"}), key, sid
     return None, key, sid
