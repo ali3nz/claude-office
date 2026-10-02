@@ -19,7 +19,7 @@ import {
   Sprite,
   Application as PixiApplication,
 } from "pixi.js";
-import { Component, useMemo, useEffect, useRef, useCallback, useState, type ReactNode } from "react";
+import { Component, useMemo, useEffect, useRef, useCallback, type ReactNode } from "react";
 import {
   TransformWrapper,
   TransformComponent,
@@ -99,19 +99,11 @@ import { ZoomControls } from "./ZoomControls";
 import { LoadingScreen } from "./LoadingScreen";
 import { OfficeBackground } from "./OfficeBackground";
 import { DeskCluster, BossDesk } from "./OfficeDesks";
-import {
-  RenderStatus,
-  normalizeRendererType,
-  type RenderInitState,
-  type RendererKind,
-} from "./RenderStatus";
 import { W17ANT_CAST_MODE } from "@/themes/w17ant-cast";
 
 // Application lifecycle sequencing for the black-floor diagnosis (issue 212,
 // Sol-approved instrumentation only — no behavior change). Module scope so
 // instance ids stay unique across remounts of this component.
-let APP_INSTANCE_SEQ = 0;
-let LC_EVENT_SEQ = 0;
 
 // ---- Diagnostics probes (issue 212, Sol APPROVE C-first) -------------------
 // Window-level breadcrumbs so a screenshot/console can answer: did the app
@@ -321,48 +313,7 @@ export function OfficeGame(): ReactNode {
   const hmrVersion = getHmrVersion();
 
   // Load all office textures
-  const {
-    textures,
-    loaded: spritesLoaded,
-    texturesLoaded,
-    texturesFailed,
-    timeoutFired,
-  } = useOfficeTextures();
-
-  // Render-status diagnostic state (issue 212, Sol-approved architecture):
-  // owned by the DOM parent, outside the Pixi tree. init.rejected is set
-  // ONLY on an actually observed init-path error -- the installed
-  // @pixi/react API exposes onInit on success only, so absence of onInit
-  // (stall) must never masquerade as rejection.
-  const [renderInit, setRenderInit] = useState<RenderInitState>(() => ({
-    entered: true,
-    enteredAt: Date.now(),
-    resolved: false,
-    rejected: false,
-    errorStep: null,
-    errorMessage: null,
-  }));
-  const [rendererType, setRendererType] = useState<RendererKind>(null);
-  // Lifecycle instrumentation (issue 212 diagnosis only — no behavior change).
-  const [appInstanceId] = useState(() => {
-    APP_INSTANCE_SEQ += 1;
-    return APP_INSTANCE_SEQ;
-  });
-  const [rendererPresent, setRendererPresent] = useState<boolean | null>(null);
-  // Lifecycle event log, newest last (diagnosis only). The mount line is
-  // seeded in the lazy initializer (not an effect) to satisfy
-  // react-hooks/set-state-in-effect.
-  const [lcEvents, setLcEvents] = useState<string[]>(() => {
-    LC_EVENT_SEQ += 1;
-    const line = `#${LC_EVENT_SEQ} app#${appInstanceId} mount`;
-    console.log(`[office-lifecycle] ${line}`);
-    return [line];
-  });
-  const buildCommit =
-    process.env.NEXT_PUBLIC_CO_COMMIT &&
-    process.env.NEXT_PUBLIC_CO_COMMIT !== ""
-      ? process.env.NEXT_PUBLIC_CO_COMMIT
-      : "unknown";
+  const { textures, loaded: spritesLoaded } = useOfficeTextures();
 
   // Start animation system
   useAnimationSystem();
@@ -374,15 +325,6 @@ export function OfficeGame(): ReactNode {
     wireGameRuntime();
     return () => unwireGameRuntime();
   }, []);
-
-  // Lifecycle: unmount ordering (diagnosis only; mount is seeded above).
-  useEffect(() => {
-    return () => {
-      LC_EVENT_SEQ += 1;
-      const bye = `#${LC_EVENT_SEQ} app#${appInstanceId} unmount`;
-      console.log(`[office-lifecycle] ${bye}`);
-    };
-  }, [appInstanceId]);
 
   // Cleanup on unmount (HMR or navigation)
   useEffect(() => {
@@ -526,21 +468,6 @@ export function OfficeGame(): ReactNode {
           contentClass="w-full h-full"
         >
           <div className="pixi-canvas-container w-full h-full relative">
-            <RenderStatus
-              init={renderInit}
-              rendererType={rendererType}
-              rendererPresent={rendererPresent}
-              appInstanceId={appInstanceId}
-              lcEvents={lcEvents}
-              gateOpen={spritesLoaded}
-              assets={{
-                spritesLoaded,
-                texturesLoaded,
-                texturesFailed,
-                timeoutFired,
-              }}
-              buildCommit={buildCommit}
-            />
             <Application
               key={`pixi-app-${hmrVersion}`}
               width={CANVAS_WIDTH}
@@ -552,11 +479,7 @@ export function OfficeGame(): ReactNode {
               }
               onInit={(app) => {
                 appRef.current = app;
-                const renderer = (app as unknown as { renderer?: unknown })
-                  .renderer;
-                setRendererPresent(renderer != null);
-                setRendererType(normalizeRendererType(renderer ?? app));
-                // Diagnostics (Sol C-first): app/renderer/canvas identity.
+                // Diagnostics (Sol C-first, invisible): app/canvas identity.
                 try {
                   const appCanvas = (app as unknown as { canvas?: unknown })
                     .canvas;
@@ -565,26 +488,18 @@ export function OfficeGame(): ReactNode {
                   );
                   const allCanvases = document.querySelectorAll("canvas");
                   coSet("app_state", "initialized");
-                  coSet("renderer_type", normalizeRendererType(renderer ?? app));
                   coSet(
                     "renderer_canvas_is_dom_canvas",
                     appCanvas != null && appCanvas === domCanvas,
                   );
-                  coSet("app_canvas_tag", (appCanvas as HTMLElement)?.tagName ?? "none");
+                  coSet(
+                    "app_canvas_tag",
+                    (appCanvas as HTMLElement)?.tagName ?? "none",
+                  );
                   coSet("dom_canvas_count", allCanvases.length);
                 } catch (err) {
                   coSet("oninit_probe_error", String(err).slice(0, 200));
                 }
-                LC_EVENT_SEQ += 1;
-                const kind =
-                  renderer != null ? "renderer-present" : "renderer-absent";
-                const line = `#${LC_EVENT_SEQ} app#${appInstanceId} init-resolve ${kind}`;
-                console.log(`[office-lifecycle] ${line}`);
-                setLcEvents((prev) => [...prev.slice(-11), line]);
-                setRenderInit((st) => ({
-                  ...st,
-                  resolved: true,
-                }));
               }}
             >
               {/* Loading screen - shown while sprites are loading */}
@@ -760,7 +675,10 @@ export function OfficeGame(): ReactNode {
                       .map((agent) => (
                         <pixiContainer
                           key={agent.id}
-                          zIndex={agent.currentPosition.y}
+                          zIndex={
+                            agent.currentPosition.y +
+                            (agent.phase === "idle" ? 60 : 0)
+                          }
                         >
                           <AgentSprite
                             id={agent.id}
