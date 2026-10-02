@@ -48,6 +48,13 @@ export interface AgentSpriteProps {
   isTyping?: boolean; // Whether agent is typing (animates arms)
   /** Issue 226 R2: facing to use while seated at the workstation (not moving). */
   seatFacing?: OfficeFacing;
+  /**
+   * Issue 226 R3: absolute on-floor position. When the sprite is wrapped in a
+   * BehaviorGroup the container `position` is LOCAL (0,0) and the group carries
+   * the world offset; facing + click still need the world coordinates. Defaults
+   * to `position` for direct (Elevator) usage.
+   */
+  worldPosition?: Position;
 }
 
 // ============================================================================
@@ -193,6 +200,7 @@ function AgentSpriteComponent({
   renderBubble = true,
   renderLabel = true,
   seatFacing,
+  worldPosition,
   isTyping: _isTyping = false,
 }: AgentSpriteProps): ReactNode {
   const clickToFocusEnabled = usePreferencesStore((s) => s.clickToFocusEnabled);
@@ -207,13 +215,14 @@ function AgentSpriteComponent({
   // by design; a one-frame-late effect update makes sprites face the wrong way
   // while walking). eslint-disable is deliberate and scoped to this block.
    
-  const prevPosRef = useRef(position);
+  const wp = worldPosition ?? position;
+  const prevPosRef = useRef(wp);
    
   const facingRef = useRef<OfficeFacing>("front-right");
   // eslint-disable-next-line react-hooks/refs
-  const dx = position.x - prevPosRef.current.x;
+  const dx = wp.x - prevPosRef.current.x;
   // eslint-disable-next-line react-hooks/refs
-  const dy = position.y - prevPosRef.current.y;
+  const dy = wp.y - prevPosRef.current.y;
   const moving = Math.abs(dx) + Math.abs(dy) > 0.01;
   if (moving) {
     // eslint-disable-next-line react-hooks/refs
@@ -225,7 +234,7 @@ function AgentSpriteComponent({
     facingRef.current = seatFacing;
   }
   // eslint-disable-next-line react-hooks/refs
-  prevPosRef.current = position;
+  prevPosRef.current = wp;
   // eslint-disable-next-line react-hooks/refs
   const facing = facingRef.current;
 
@@ -244,10 +253,10 @@ function AgentSpriteComponent({
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
     const scale = rect.width / 1280; // CANVAS_WIDTH = 1280
-    const screenX = rect.left + position.x * scale;
-    const screenY = rect.top + position.y * scale;
+    const screenX = rect.left + wp.x * scale;
+    const screenY = rect.top + wp.y * scale;
     openFocusPopup(id, screenX, screenY);
-  }, [clickToFocusEnabled, id, position.x, position.y, openFocusPopup]);
+  }, [clickToFocusEnabled, id, wp.x, wp.y, openFocusPopup]);
 
   // Bubble offset for capsule rendering
   const bubbleOffset = -93;
@@ -262,8 +271,18 @@ function AgentSpriteComponent({
       interactive={clickToFocusEnabled}
     >
       {/* W17ant Office cast sprite (fallback: legacy capsule) */}
-      {/* TEMP DIAGNOSTIC: force the legacy capsule to test the graphics path */}
-      <pixiGraphics draw={drawCallback} />
+      {castTexture ? (
+        <pixiSprite
+          texture={castTexture}
+          anchor={{ x: 0.5, y: 1 }}
+          x={0}
+          y={0}
+          height={CAST_SPRITE_HEIGHT}
+          width={castTexture.width * (CAST_SPRITE_HEIGHT / castTexture.height)}
+        />
+      ) : (
+        <pixiGraphics draw={drawCallback} />
+      )}
 
       {/* Agent name if present - hide when in elevator or when renderLabel is false */}
       {renderLabel && name && !isInElevatorZone(position) && (
