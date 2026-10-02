@@ -90,12 +90,30 @@ function RenderStatusComponent({
       ? document.querySelectorAll("canvas").length
       : null;
   const [canvasCount, setCanvasCount] = useState<number | null>(readCanvasCount);
+  // Diagnostics probe mirror (issue 212, Sol C-first): surface __co fields.
+  const readDiag = () => {
+    if (typeof window === "undefined") return null;
+    const w = window as unknown as { __co?: Record<string, unknown> };
+    const d = w.__co;
+    if (!d) return null;
+    return {
+      app: String(d["app_state"] ?? "?"),
+      tree: String(d["tree_state"] ?? String(d["tree_render"] ?? "?")),
+      canvasMatch:
+        d["renderer_canvas_is_dom_canvas"] === undefined
+          ? "?"
+          : String(d["renderer_canvas_is_dom_canvas"]),
+      errors: Array.isArray(d["errors"]) ? (d["errors"] as string[]) : [],
+    };
+  };
+  const [diag, setDiag] = useState(readDiag);
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     if (init.resolved || init.rejected) return;
     const timer = setInterval(() => {
       setNow(Date.now());
       setCanvasCount(readCanvasCount());
+      setDiag(readDiag());
     }, 1000);
     return () => clearInterval(timer);
   }, [init.resolved, init.rejected]);
@@ -126,10 +144,13 @@ function RenderStatusComponent({
         {assets.timeoutFired ? " · TIMEOUT" : ""} · assets{" "}
         {assets.texturesLoaded}/{assets.texturesLoaded + assets.texturesFailed}
         {assets.timeoutFired ? " · ASSET-TIMEOUT" : ""} · {buildCommit}
+        {diag
+          ? ` · diag app:${diag.app} tree:${diag.tree} canvasMatch:${diag.canvasMatch} errs:${diag.errors.length}`
+          : ""}
       </div>
       {failed && (
         <div className="mt-1 px-2 py-1 rounded bg-slate-900/90 border border-red-800 text-slate-300 whitespace-pre-wrap max-w-[330px]">
-          {`init: entered=${String(init.entered)} resolved=${String(init.resolved)} rejected=${String(init.rejected)}${stalled ? " STALLED>30s" : ""}\nrenderer: ${rendererType ?? "null"} present=${rendererPresent == null ? "?" : String(rendererPresent)}\ncanvases: ${canvasCount ?? "?"}\nassets: loaded=${assets.spritesLoaded} ok=${assets.texturesLoaded} failed=${assets.texturesFailed} timeout=${String(assets.timeoutFired)}\nbuild: ${buildCommit}\nlifecycle:\n${lcEvents.length > 0 ? lcEvents.join("\n") : "—"}`}
+          {`init: entered=${String(init.entered)} resolved=${String(init.resolved)} rejected=${String(init.rejected)}${stalled ? " STALLED>30s" : ""}\nrenderer: ${rendererType ?? "null"} present=${rendererPresent == null ? "?" : String(rendererPresent)}\ncanvases: ${canvasCount ?? "?"}\nassets: loaded=${assets.spritesLoaded} ok=${assets.texturesLoaded} failed=${assets.texturesFailed} timeout=${String(assets.timeoutFired)}\nbuild: ${buildCommit}\ndiag: app=${diag?.app ?? "?"} tree=${diag?.tree ?? "?"} canvasMatch=${diag?.canvasMatch ?? "?"}${diag && diag.errors.length > 0 ? "\nerrors:\n" + diag.errors.slice(0, 8).join("\n") : ""}\nlifecycle:\n${lcEvents.length > 0 ? lcEvents.join("\n") : "—"}`}
         </div>
       )}
     </div>

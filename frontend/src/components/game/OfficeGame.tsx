@@ -19,7 +19,7 @@ import {
   Sprite,
   Application as PixiApplication,
 } from "pixi.js";
-import { useMemo, useEffect, useRef, useCallback, useState, type ReactNode } from "react";
+import { Component, useMemo, useEffect, useRef, useCallback, useState, type ReactNode } from "react";
 import {
   TransformWrapper,
   TransformComponent,
@@ -111,6 +111,47 @@ import { W17ANT_CAST_MODE } from "@/themes/w17ant-cast";
 let APP_INSTANCE_SEQ = 0;
 let LC_EVENT_SEQ = 0;
 
+// ---- Diagnostics probes (issue 212, Sol APPROVE C-first) -------------------
+// Window-level breadcrumbs so a screenshot/console can answer: did the app
+// initialize, was a renderer created, does its canvas match the DOM canvas,
+// did the office subtree render/mount, and did any error occur. Write-only,
+// no behaviour change.
+type CoDiag = Record<string, unknown>;
+function coDiag(): CoDiag | null {
+  if (typeof window === "undefined") return null;
+  const w = window as unknown as { __co?: CoDiag };
+  if (!w.__co) w.__co = {};
+  return w.__co;
+}
+function coSet(key: string, value: unknown): void {
+  const d = coDiag();
+  if (d && d[key] === undefined) d[key] = value;
+}
+
+if (typeof window !== "undefined") {
+  const w = window as unknown as { __coListeners?: boolean };
+  if (!w.__coListeners) {
+    w.__coListeners = true;
+    const d = coDiag();
+    if (d) {
+      d["errors"] = d["errors"] ?? [];
+      const push = (s: string) => {
+        const arr = d["errors"] as string[];
+        if (arr.length < 20) arr.push(s.slice(0, 240));
+      };
+      window.addEventListener("error", (e) => push("win:" + String(e.message)));
+      window.addEventListener("unhandledrejection", (e) =>
+        push("rej:" + String((e.reason && (e.reason.message || e.reason)) || "?")),
+      );
+      const orig = console.error;
+      console.error = (...a: unknown[]) => {
+        push("cerr:" + a.map((x) => String(x)).join(" "));
+        return orig.apply(console, a);
+      };
+    }
+  }
+}
+
 // Register PixiJS components
 extend({ Container, Text, Graphics, Sprite });
 
@@ -186,6 +227,33 @@ function FloorSign({
       </pixiContainer>
     </pixiContainer>
   );
+}
+
+// Office-subtree probe (Sol C-first): distinguishes render from mount.
+function CoTreeProbe(): null {
+  coSet("tree_render", "render");
+  useEffect(() => {
+    coSet("tree_state", "mounted");
+  }, []);
+  return null;
+}
+
+// Catches render/lifecycle errors inside the office subtree (H2 evidence).
+class CoErrorBoundary extends Component<
+  { children: ReactNode },
+  { failed: boolean }
+> {
+  state = { failed: false };
+  static getDerivedStateFromError(): { failed: boolean } {
+    return { failed: true };
+  }
+  componentDidCatch(error: unknown): void {
+    coSet("pixi_error", String(error).slice(0, 240));
+  }
+  render(): ReactNode {
+    if (this.state.failed) return null;
+    return this.props.children;
+  }
 }
 
 // ============================================================================
@@ -436,6 +504,25 @@ export function OfficeGame(): ReactNode {
                   .renderer;
                 setRendererPresent(renderer != null);
                 setRendererType(normalizeRendererType(renderer ?? app));
+                // Diagnostics (Sol C-first): app/renderer/canvas identity.
+                try {
+                  const appCanvas = (app as unknown as { canvas?: unknown })
+                    .canvas;
+                  const domCanvas = document.querySelector(
+                    ".pixi-canvas-container canvas",
+                  );
+                  const allCanvases = document.querySelectorAll("canvas");
+                  coSet("app_state", "initialized");
+                  coSet("renderer_type", normalizeRendererType(renderer ?? app));
+                  coSet(
+                    "renderer_canvas_is_dom_canvas",
+                    appCanvas != null && appCanvas === domCanvas,
+                  );
+                  coSet("app_canvas_tag", (appCanvas as HTMLElement)?.tagName ?? "none");
+                  coSet("dom_canvas_count", allCanvases.length);
+                } catch (err) {
+                  coSet("oninit_probe_error", String(err).slice(0, 200));
+                }
                 LC_EVENT_SEQ += 1;
                 const kind =
                   renderer != null ? "renderer-present" : "renderer-absent";
@@ -453,7 +540,9 @@ export function OfficeGame(): ReactNode {
 
               {/* Office content - hidden while loading */}
               {spritesLoaded && (
-                <>
+                <CoErrorBoundary>
+                  <>
+                  <CoTreeProbe />
                   {/* Floor and walls */}
                   <OfficeBackground floorTileTexture={textures.floorTile} />
 
@@ -859,7 +948,8 @@ export function OfficeGame(): ReactNode {
                       <BossBubble content={boss.bubble.content} yOffset={-80} />
                     </pixiContainer>
                   )}
-                </>
+                  </>
+                </CoErrorBoundary>
               )}
             </Application>
           </div>
