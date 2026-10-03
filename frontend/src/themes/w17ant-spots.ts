@@ -229,20 +229,22 @@ export const SEAT_FACINGS: readonly OfficeFacing[] = Array.from(
  * the rug); the others get dedicated desks outside the 10-workstation pool so
  * they can never collide with a session character.
  */
-export const BOSS_SEAT: Position = { x: 640, y: 958 };
+export const BOSS_SEAT: Position = { x: 640, y: 905 };
 
 export const PINNED_SEATS: Record<string, Position> = {
+  // Issue 226 R6j (operator: "move sol docker and ghost in a bit so they are
+  // not on the edge").
   "Sol Docker": BOSS_SEAT,
-  "Sol Webserver": { x: 1075, y: 735 },
-  "GhostReporting": { x: 205, y: 735 },
-  "TruFreedom": { x: 862, y: 882 },
+  "Sol Webserver": { x: 1040, y: 700 },
+  "GhostReporting": { x: 288, y: 720 },
+  "TruFreedom": { x: 830, y: 850 },
 };
 
 /** Dedicated desks for the pinned seats (the boss desk already exists). */
 export const PINNED_DESKS: DeskFurniture[] = [
-  { kind: "right-front", position: { x: 1075, y: 735 } },
-  { kind: "left-front", position: { x: 205, y: 735 } },
-  { kind: "right-front", position: { x: 862, y: 882 } },
+  { kind: "right-front", position: { x: 1040, y: 700 } },
+  { kind: "left-front", position: { x: 288, y: 720 } },
+  { kind: "right-front", position: { x: 830, y: 850 } },
 ];
 
 export const BOSS_DESK: DeskFurniture = {
@@ -252,6 +254,6 @@ export const BOSS_DESK: DeskFurniture = {
   // as standing AT it rather than in front of a desk far behind him.
   position: {
     x: BOSS_RUG_POSITION.x,
-    y: 958 + 6,
+    y: 905 + 6,
   },
 };
