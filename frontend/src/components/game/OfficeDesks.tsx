@@ -98,6 +98,9 @@ const DECOR: { path: string; art: [number, number]; h: number }[] = [
   { path: "/sprites/furniture/filling-closed.png", art: [24.5, 52.0], h: 56 },
   { path: "/sprites/cats/cat-bandit.png", art: [48.0, 62.0], h: 34 },
   { path: "/sprites/cats/cat-sprinkles.png", art: [33.0, 78.0], h: 34 },
+  { path: "/sprites/decoration/white-board.png", art: [13.5, 52.0], h: 86 },
+  { path: "/sprites/furniture/filling-open.png", art: [76.0, 47.0], h: 60 },
+  { path: "/sprites/decoration/monstera-plant.png", art: [57.0, 47.5], h: 71 },
 ];
 
 const ART_PER_ROOM = 1.5;
@@ -130,10 +133,54 @@ function DecorSprite({
   );
 }
 
+/**
+ * Issue 226 R6e (operator: "office so empty ... couch ... bed"): the upstream
+ * art set ships no couch/bed, so the lounge is drawn procedurally (dark-mode
+ * palette) and the biggest upstream props are added around it.
+ */
+function Lounge(): ReactNode {
+  return (
+    <>
+      <pixiGraphics
+        draw={(g) => {
+          g.clear();
+          g.roundRect(430, 690, 330, 190, 40);
+          g.fill({ color: 0x1b2433, alpha: 0.95 });
+          g.roundRect(444, 703, 302, 164, 34);
+          g.fill({ color: 0x223047, alpha: 0.95 });
+        }}
+      />
+      <pixiGraphics
+        draw={(g) => {
+          g.clear();
+          g.roundRect(470, 620, 250, 46, 12);
+          g.fill(0x2f3d55);
+          g.roundRect(462, 652, 266, 44, 10);
+          g.fill(0x3b4b68);
+          g.roundRect(452, 624, 22, 74, 8);
+          g.fill(0x2a3750);
+          g.roundRect(716, 624, 22, 74, 8);
+          g.fill(0x2a3750);
+        }}
+      />
+      <pixiGraphics
+        draw={(g) => {
+          g.clear();
+          g.roundRect(548, 726, 130, 62, 10);
+          g.fill(0x4a3524);
+          g.roundRect(556, 733, 114, 48, 8);
+          g.fill(0x5c422c);
+        }}
+      />
+    </>
+  );
+}
+
 /** Room dressing for the empty middle of the floor. */
 export function OfficeDecor(): ReactNode {
   return (
     <>
+      <Lounge />
       {DECOR.map((d, i) => (
         <DecorSprite key={`decor-${i}`} path={d.path} art={d.art} h={d.h} />
       ))}

@@ -58,6 +58,7 @@ import { useCompactionAnimation } from "@/systems/compactionAnimation";
 import { useOfficeTextures } from "@/hooks/useOfficeTextures";
 import {
   getSpotForDesk,
+  seatDeskFor,
   SEAT_FACINGS,
   COFFEE_SPOT,
   WATER_SPOT,
@@ -412,10 +413,18 @@ function seatFacingFor(agent: {
   if (agent.name === "TruFreedom") return "front-left";
   const deskNum = deskAssignmentCache.get(agent.id) ?? agent.desk;
   if (deskNum) {
-    // Issue 226 R6d (operator: "face their computer"): use the seat facing
-    // AUTHORED by the W17ant artists, which is calibrated against the desk
-    // that seat belongs to. My computed desk-vector facing pointed the wrong
-    // way for several seats.
+    // Issue 226 R6e (operator: "characters are facing the wall ... face their
+    // computer"): aim the sprite at the desk's SCREEN (upper part of the desk
+    // sprite), not at the desk's floor anchor - that is what puts the body
+    // square to the monitor instead of turned away from it.
+    const seat = getSpotForDesk(deskNum).position;
+    const desk = seatDeskFor(deskNum);
+    if (desk) {
+      const dx = desk.position.x - seat.x;
+      const dy = desk.position.y - 120 - seat.y; // screen sits ~120px up
+      if (dy < 0) return dx >= 0 ? "rear-right" : "rear-left";
+      return dx >= 0 ? "front-right" : "front-left";
+    }
     return getSpotForDesk(deskNum).facing;
   }
   return undefined;

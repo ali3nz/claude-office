@@ -189,6 +189,13 @@ export const DESKS: DeskFurniture[] = (
 /** DESKS re-ordered so entry i is the workstation of seat i+1. */
 const DESKS_SEAT_ORDER = SEAT_TO_DESK_INDEX.map((idx) => DESKS[idx]);
 
+/** The furniture desk that belongs to seat number n (1-based). */
+export function seatDeskFor(n: number): DeskFurniture | undefined {
+  const len = DESKS.length;
+  const idx = SEAT_TO_DESK_INDEX[(((n - 1) % len) + len) % len];
+  return DESKS[idx];
+}
+
 /**
  * Facing that points from each of the 10 seats AT its own workstation
  * (issue 226 R6c, operator: "avatars are still facing the wall").
