@@ -247,8 +247,11 @@ export const PINNED_DESKS: DeskFurniture[] = [
 
 export const BOSS_DESK: DeskFurniture = {
   kind: "right-front",
+  // Issue 226 R6h (operator: "Sol docker not at his desk properly"): the desk
+  // is anchored at his seat (PINNED_SEATS["Sol Docker"] = 640,958) so he reads
+  // as standing AT it rather than in front of a desk far behind him.
   position: {
     x: BOSS_RUG_POSITION.x,
-    y: BOSS_RUG_POSITION.y - 54, // 886 = boss feet (900) − 14
+    y: 958 + 6,
   },
 };

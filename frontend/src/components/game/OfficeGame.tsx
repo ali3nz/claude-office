@@ -374,10 +374,15 @@ const ALWAYS_PRESENT = new Set([
 ]);
 
 function isRecentlyActive(
-  agent: { name: string | null; lastActivityAt?: number },
+  agent: { id?: string; name: string | null; lastActivityAt?: number },
   now: number,
 ): boolean {
   if (agent.name && ALWAYS_PRESENT.has(agent.name)) return true;
+  // Issue 226 R6h: robust persistent-identity detection - the ai-agents and
+  // the two gateway sessions never leave the floor even when their feed goes
+  // quiet (TruFreedom went missing because only the display name was checked).
+  const id = agent.id ?? "";
+  if (id.startsWith("ai-") || id.includes("agentchat-sol")) return true;
   if (!agent.lastActivityAt) return true;
   return now - agent.lastActivityAt < IDLE_TIMEOUT_MS;
 }
@@ -1127,7 +1132,11 @@ export function OfficeGame(): ReactNode {
                           name={agent.name!}
                           position={{ x: 0, y: 0 }}
                           glyph={agentStateGlyph(agent)}
-                          task={agent.currentTask}
+                          task={
+                            agent.currentTask ??
+                            agent.bubble.content?.text ??
+                            agent.backendState
+                          }
                           state={agent.backendState}
                           alwaysBusy={
                             agent.name === "Sol Docker" ||
