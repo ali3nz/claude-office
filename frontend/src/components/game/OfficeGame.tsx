@@ -412,6 +412,49 @@ const SOL_SEATS: Record<string, { x: number; y: number }> = PINNED_SEATS;
  */
 const persistentIdentityCache = new Map<string, AgentAnimationState>();
 
+/**
+ * Issue 226 R7b (operator: "always on ... same desk ... same avatar every
+ * time"): the four persistent identities are SEEDED here so they render from
+ * the very first frame of a cold load, before any feed event arrives. The ids
+ * are the backend's stable agent ids, so the deterministic avatar hash gives
+ * exactly the same character as the live state does; the pinned seat map
+ * gives the fixed desk. A live state, when it arrives, replaces the seed.
+ */
+const PERSISTENT_SEEDS: { name: string; id: string }[] = [
+  { name: "Sol Docker", id: "gateway-dockerhost" },
+  { name: "Sol Webserver", id: "gateway-webserver" },
+  { name: "GhostReporting", id: "ai-companion" },
+  { name: "TruFreedom", id: "ai-explorer" },
+];
+
+function seedPersistentIdentities(): void {
+  const now = Date.now();
+  for (const { name, id } of PERSISTENT_SEEDS) {
+    if (persistentIdentityCache.has(name)) continue;
+    persistentIdentityCache.set(name, {
+      id,
+      name,
+      color: "#64748b",
+      number: 0,
+      desk: null,
+      backendState: "idle",
+      currentTask: null,
+      characterType: null,
+      parentSessionId: null,
+      parentId: null,
+      phase: "idle",
+      currentPosition: { x: 0, y: 0 },
+      targetPosition: { x: 0, y: 0 },
+      path: null,
+      bubble: { content: null, queue: [], displayStartTime: 0 },
+      queueType: null,
+      queueIndex: -1,
+      isTyping: false,
+      lastActivityAt: now,
+    });
+  }
+}
+
 /*
  * Issue 226 R6b (operator: "why not face their computer"): the W17ant seat
  * facing is authored to point AT that seat's workstation, so it is used
@@ -705,7 +748,12 @@ export function OfficeGame(): ReactNode {
     const standIns: typeof real = [];
     for (const name of Object.keys(PINNED_SEATS)) {
       if (!present.has(name)) {
-        const cached = persistentIdentityCache.get(name);
+        const cached =
+          persistentIdentityCache.get(name) ??
+          (() => {
+            seedPersistentIdentities();
+            return persistentIdentityCache.get(name);
+          })();
         if (cached) standIns.push(cached);
       }
     }
