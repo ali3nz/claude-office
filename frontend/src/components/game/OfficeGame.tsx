@@ -125,6 +125,7 @@ import { EditableSprite } from "./edit/EditableSprite";
 import { useEditDrag } from "./edit/useEditDrag";
 import { usePixiTexture } from "@/hooks/usePixiTexture";
 import { spriteCatalogItemByPath } from "@/constants/spriteCatalog";
+import { turnedSprite } from "@/systems/facingCycle";
 import {
   useOfficeEditStore,
   type InsertedSprite,
@@ -616,11 +617,12 @@ function BehaviorGroup({
     }
   });
 
-  // Issue 246: rotate the avatar about its visual centre. Cast sprites are
-  // anchored bottom-centre at the feet (CAST_SPRITE_HEIGHT = 133), so the
-  // visual centre sits at y = -66.5 and the inner content shifts back down.
+  // Issue 246 follow-up: Rotate changes the avatar's FACING (handled inside
+  // AgentSprite from the same override); the sprite is never spun.
   const AGENT_SPRITE_HEIGHT = 133;
-  const rotRad = ((override?.rotation ?? 0) * Math.PI) / 180;
+
+  // Deleted by the operator (Reset restores): hide every layer of this agent.
+  if (override?.hidden) return null;
 
   return (
     <pixiContainer
@@ -634,15 +636,7 @@ function BehaviorGroup({
       }
       onPointerDown={isEditMode && editChrome ? onPointerDown : undefined}
     >
-      {editChrome ? (
-        <pixiContainer x={0} y={-AGENT_SPRITE_HEIGHT / 2} rotation={rotRad}>
-          <pixiContainer x={0} y={AGENT_SPRITE_HEIGHT / 2}>
-            {children}
-          </pixiContainer>
-        </pixiContainer>
-      ) : (
-        children
-      )}
+      {children}
       {/* Issue 246: selection affordance for the avatar (axis-aligned box). */}
       {editChrome && isSelected && (
         <pixiGraphics
@@ -663,7 +657,9 @@ function BehaviorGroup({
  * rotatable like every other office sprite.
  */
 function InsertedSpriteView({ entity }: { entity: InsertedSprite }): ReactNode {
-  const texture = usePixiTexture(entity.spritePath);
+  // Facing change: next facing variant (desks, cast) or a mirror (others).
+  const turned = turnedSprite(entity.spritePath, entity.turn ?? 0);
+  const texture = usePixiTexture(turned.path);
   if (!texture) return null;
   // Issue 246 review I4: prefer the catalog's display height for the sprite;
   // the raw texture height over/under-sizes assets.
@@ -677,7 +673,7 @@ function InsertedSpriteView({ entity }: { entity: InsertedSprite }): ReactNode {
       name={entity.name}
       defaultX={entity.x}
       defaultY={entity.y}
-      defaultRotation={entity.rotation}
+      flip={turned.flip}
       width={width}
       height={height}
       texture={texture}

@@ -14,7 +14,8 @@
 import { type ReactNode } from "react";
 import { usePixiTexture } from "@/hooks/usePixiTexture";
 import { artToCanvas } from "@/themes/w17ant-spots";
-import { EditableSprite } from "./edit/EditableSprite";
+import { EditableSprite, useEntityTurn } from "./edit/EditableSprite";
+import { turnDeskKind, turnedSprite } from "@/systems/facingCycle";
 import {
   DESKS,
   DESK_SPOTS,
@@ -39,9 +40,13 @@ function DeskSprite({
   boss?: boolean;
   zBias?: number;
 }): ReactNode {
-  const texture = usePixiTexture(deskSpritePath(desk.kind));
+  // Issue 246 follow-up: Rotate changes which way the desk FACES (next
+  // standing-desk variant), it does not spin the sprite.
+  const turn = useEntityTurn(id ?? "");
+  const kind = turnDeskKind(desk.kind, turn);
+  const texture = usePixiTexture(deskSpritePath(kind));
   if (!texture) return null;
-  const height = deskSpriteHeight(desk.kind);
+  const height = deskSpriteHeight(kind);
   const width = (texture.width / texture.height) * height;
 
   if (id) {
@@ -146,7 +151,9 @@ function DecorSprite({
   art: [number, number];
   h: number;
 }): ReactNode {
-  const texture = usePixiTexture(path);
+  const turn = useEntityTurn(id ?? "");
+  const turned = turnedSprite(path, turn);
+  const texture = usePixiTexture(turned.path);
   if (!texture) return null;
   const pos = artToCanvas((art[0] / 100) * 1200, (art[1] / 100) * 896);
   const height = h * ART_PER_ROOM * ROOM_SCALE;
@@ -161,6 +168,7 @@ function DecorSprite({
         defaultY={pos.y}
         width={width}
         height={height}
+        flip={turned.flip}
         zBias={-400}
         texture={texture}
       />

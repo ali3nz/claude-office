@@ -16,7 +16,10 @@ import { create } from "zustand";
 export interface EntityOverride {
   x?: number;
   y?: number;
-  rotation: number; // 0, 90, 180, 270 degrees
+  /** Facing steps (see systems/facingCycle). Legacy `rotation` is ignored. */
+  turn?: number;
+  /** Deleted (hidden) by the operator; Reset restores. */
+  hidden?: boolean;
 }
 
 export interface InsertedSprite {
@@ -25,7 +28,8 @@ export interface InsertedSprite {
   name: string;
   x: number;
   y: number;
-  rotation: number;
+  /** Facing steps (see systems/facingCycle). */
+  turn?: number;
 }
 
 const STORAGE_KEY_EDIT_MODE = "claude-office-edit-mode";
@@ -111,6 +115,8 @@ interface OfficeEditState {
   setPaletteOpen: (open: boolean) => void;
   updateEntityPosition: (id: string, x: number, y: number, commit?: boolean) => void;
   rotateEntity: (id: string) => void;
+  /** Delete any object: inserted sprites are removed, built-ins are hidden. */
+  deleteEntity: (id: string) => void;
   insertEntity: (spritePath: string, x: number, y: number, name?: string) => string;
   removeInsertedEntity: (id: string) => void;
   setIsDragging: (dragging: boolean) => void;
@@ -170,7 +176,6 @@ export const useOfficeEditStore = create<OfficeEditState>((set, get) => ({
           ...current,
           x,
           y,
-          rotation: current?.rotation ?? 0,
         },
       };
       if (commit) saveOverrides(updatedOverrides);
@@ -185,24 +190,41 @@ export const useOfficeEditStore = create<OfficeEditState>((set, get) => ({
       if (insertedIndex !== -1) {
         const updatedInserted = [...state.insertedEntities];
         const item = updatedInserted[insertedIndex];
-        const nextRotation = ((item.rotation + 90) % 360);
-        updatedInserted[insertedIndex] = { ...item, rotation: nextRotation };
+        updatedInserted[insertedIndex] = { ...item, turn: ((item.turn ?? 0) + 1) % 20 };
         saveInserted(updatedInserted);
         return { insertedEntities: updatedInserted };
       }
 
       // Existing entity override
       const current = state.overrides[id];
-      const nextRotation = (((current?.rotation ?? 0) + 90) % 360);
       const updatedOverrides = {
         ...state.overrides,
-        [id]: {
-          ...current,
-          rotation: nextRotation,
-        },
+        [id]: { ...current, turn: ((current?.turn ?? 0) + 1) % 20 },
       };
       saveOverrides(updatedOverrides);
       return { overrides: updatedOverrides };
+    });
+  },
+
+  deleteEntity: (id: string) => {
+    set((state) => {
+      if (state.insertedEntities.some((e) => e.id === id)) {
+        const updated = state.insertedEntities.filter((e) => e.id !== id);
+        saveInserted(updated);
+        return {
+          insertedEntities: updated,
+          selectedEntityId: state.selectedEntityId === id ? null : state.selectedEntityId,
+        };
+      }
+      const updatedOverrides = {
+        ...state.overrides,
+        [id]: { ...state.overrides[id], hidden: true },
+      };
+      saveOverrides(updatedOverrides);
+      return {
+        overrides: updatedOverrides,
+        selectedEntityId: state.selectedEntityId === id ? null : state.selectedEntityId,
+      };
     });
   },
 
@@ -223,7 +245,7 @@ export const useOfficeEditStore = create<OfficeEditState>((set, get) => ({
       name: baseName,
       x: Math.round(x),
       y: Math.round(y),
-      rotation: 0,
+      turn: 0,
     };
 
     set((state) => {

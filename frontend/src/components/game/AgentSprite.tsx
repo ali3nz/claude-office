@@ -39,6 +39,7 @@ import {
 } from "@/themes/w17ant-cast";
 import { getOffset } from "@/systems/officeBehavior";
 import { useOfficeEditStore } from "@/stores/officeEditStore";
+import { avatarFacingForTurn } from "@/systems/facingCycle";
 
 // ============================================================================
 // TYPES
@@ -238,6 +239,7 @@ function AgentSpriteComponent({
   // Issue 246: while the office is unlocked for editing, clicks select/drag
   // sprites instead of opening the focus popup.
   const isEditMode = useOfficeEditStore((s) => s.isEditMode);
+  const editTurn = useOfficeEditStore((s) => s.overrides[id]?.turn ?? 0);
 
   // ---- W17ant cast selection -------------------------------------------
   // Operator (issue 226 R5): Sol Docker is the BOSS - pin the Mike Scott
@@ -360,8 +362,11 @@ function AgentSpriteComponent({
   });
 
   // ---- facing precedence (Sol): behavior walk > legacy walk > glance > seat
+  // Issue 246 follow-up: an operator-chosen facing (edit-mode Rotate) wins.
+  const forcedFacing = avatarFacingForTurn(editTurn);
   // eslint-disable-next-line react-hooks/refs
   const facing =
+    forcedFacing ??
     behaviorFacing ??
     (moving ? getFacingFromDelta(dx, dy) : null) ??
     glanceFacing ??

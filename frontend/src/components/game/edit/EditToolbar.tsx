@@ -13,6 +13,7 @@
 import { useEffect, useCallback } from "react";
 import {
   RotateCw,
+  RotateCcw,
   Plus,
   Trash2,
   X,
@@ -29,7 +30,8 @@ export function EditToolbar() {
   const selectedEntityId = useOfficeEditStore((s) => s.selectedEntityId);
   const selectEntity = useOfficeEditStore((s) => s.selectEntity);
   const rotateEntity = useOfficeEditStore((s) => s.rotateEntity);
-  const removeInsertedEntity = useOfficeEditStore((s) => s.removeInsertedEntity);
+  const deleteEntity = useOfficeEditStore((s) => s.deleteEntity);
+  const resetAllEdits = useOfficeEditStore((s) => s.resetAllEdits);
   const insertedEntities = useOfficeEditStore((s) => s.insertedEntities);
 
   const selectedInserted = insertedEntities.find(
@@ -44,10 +46,16 @@ export function EditToolbar() {
   }, [selectedEntityId, rotateEntity]);
 
   const handleDelete = useCallback(() => {
-    if (selectedEntityId && isInserted) {
-      removeInsertedEntity(selectedEntityId);
+    if (selectedEntityId) {
+      deleteEntity(selectedEntityId);
     }
-  }, [selectedEntityId, isInserted, removeInsertedEntity]);
+  }, [selectedEntityId, deleteEntity]);
+
+  const handleReset = useCallback(() => {
+    if (window.confirm("Reset the office layout? This restores every deleted, moved, turned and inserted object.")) {
+      resetAllEdits();
+    }
+  }, [resetAllEdits]);
 
   // Keyboard shortcut: Delete or Backspace key removes selected inserted sprite
   useEffect(() => {
@@ -66,7 +74,7 @@ export function EditToolbar() {
       }
 
       if (e.key === "Delete" || e.key === "Backspace") {
-        if (selectedEntityId && isInserted) {
+        if (selectedEntityId) {
           e.preventDefault();
           handleDelete();
         }
@@ -146,23 +154,21 @@ export function EditToolbar() {
           <button
             onClick={handleRotate}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-sky-600 hover:bg-sky-500 text-white font-bold rounded-lg shadow transition-colors active:scale-95"
-            title="Rotate 90° clockwise (Key: R)"
+            title="Turn to face the next direction (Key: R)"
           >
             <RotateCw size={13} />
             <span>Rotate</span>
           </button>
 
-          {/* Delete Button for inserted sprites (Requirement 5) */}
-          {isInserted && (
-            <button
-              onClick={handleDelete}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 bg-rose-600/90 hover:bg-rose-500 text-white font-bold rounded-lg shadow transition-colors"
-              title="Delete sprite (Key: Del)"
-            >
-              <Trash2 size={13} />
-              <span>Delete</span>
-            </button>
-          )}
+          {/* Delete works on ANY selected object (built-ins are hidden; Reset restores) */}
+          <button
+            onClick={handleDelete}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 bg-rose-600/90 hover:bg-rose-500 text-white font-bold rounded-lg shadow transition-colors"
+            title="Delete object (Key: Del)"
+          >
+            <Trash2 size={13} />
+            <span>Delete</span>
+          </button>
 
           {/* Deselect */}
           <button
@@ -174,6 +180,16 @@ export function EditToolbar() {
           </button>
         </div>
       )}
+
+      {/* Reset: undo every edit (restores deleted objects, positions, facings) */}
+      <button
+        onClick={handleReset}
+        className="flex items-center gap-1 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-amber-400 font-bold rounded-lg border border-amber-500/30 transition-colors"
+        title="Reset all layout edits"
+      >
+        <RotateCcw size={14} />
+        <span>Reset</span>
+      </button>
 
       {/* Done / Exit button */}
       <button

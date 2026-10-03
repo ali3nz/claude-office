@@ -19,7 +19,8 @@ export interface EditableSpriteProps {
   name?: string;
   defaultX: number;
   defaultY: number;
-  defaultRotation?: number;
+  /** Mirror horizontally (facing change for sprites without facing variants). */
+  flip?: boolean;
   width: number;
   height: number;
   zBias?: number;
@@ -32,7 +33,7 @@ export function EditableSprite({
   id,
   defaultX,
   defaultY,
-  defaultRotation = 0,
+  flip = false,
   width,
   height,
   zBias = 0,
@@ -45,15 +46,16 @@ export function EditableSprite({
 
   const isSelected = isEditMode && selectedEntityId === id;
 
-  // Position & rotation from override layer or defaults
+  // Position from override layer or defaults
   const x = override?.x ?? defaultX;
   const y = override?.y ?? defaultY;
-  const rotation = override?.rotation ?? defaultRotation;
 
   const { onPointerDown, isDragging } = useEditDrag(id, x, y);
 
-  const rotRad = (rotation * Math.PI) / 180;
   const zIndex = y + zBias;
+
+  // Deleted by the operator (Reset restores) - hooks above stay unconditional.
+  if (override?.hidden) return null;
 
   // Selection box padding
   const pad = 6;
@@ -68,11 +70,11 @@ export function EditableSprite({
       cursor={isEditMode ? (isDragging ? "grabbing" : "grab") : "default"}
       onPointerDown={isEditMode ? onPointerDown : undefined}
     >
-      {/* Rotatable inner container centered at sprite visual center (y - height/2) */}
+      {/* Inner container centered at sprite visual centre; flip mirrors the facing */}
       <pixiContainer
         x={0}
         y={-height / 2}
-        rotation={rotRad}
+        scale={{ x: flip ? -1 : 1, y: 1 }}
       >
         {texture && (
           <pixiSprite
@@ -118,4 +120,12 @@ export function EditableSprite({
       </pixiContainer>
     </pixiContainer>
   );
+}
+
+/** Facing steps the operator applied to an object (see systems/facingCycle). */
+export function useEntityTurn(id: string, fallback = 0): number {
+  return useOfficeEditStore((s) => {
+    const inserted = s.insertedEntities.find((e) => e.id === id);
+    return inserted?.turn ?? s.overrides[id]?.turn ?? fallback;
+  });
 }
