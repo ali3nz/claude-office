@@ -13,6 +13,9 @@
 
 import { create } from "zustand";
 
+/** Ids of avatar (agent) groups seen in edit chrome - drives the avatar picker. */
+export const avatarIds = new Set<string>();
+
 export interface EntityOverride {
   x?: number;
   y?: number;

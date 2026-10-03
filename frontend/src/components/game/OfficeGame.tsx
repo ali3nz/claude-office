@@ -128,6 +128,7 @@ import { spriteCatalogItemByPath } from "@/constants/spriteCatalog";
 import { turnedSprite } from "@/systems/facingCycle";
 import {
   useOfficeEditStore,
+  avatarIds,
   type InsertedSprite,
 } from "@/stores/officeEditStore";
 import { LoadingScreen } from "./LoadingScreen";
@@ -581,6 +582,7 @@ function BehaviorGroup({
   const ref = useRef<Container | null>(null);
   const isEditMode = useOfficeEditStore((s) => s.isEditMode);
   const isSelected = useOfficeEditStore((s) => s.selectedEntityId === id);
+  if (editChrome) avatarIds.add(id);
   const override = useOfficeEditStore((s) => s.overrides[id]);
 
   // Issue 246 review I1: start the drag from the DISPLAYED position

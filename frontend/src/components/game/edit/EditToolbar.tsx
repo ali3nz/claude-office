@@ -20,7 +20,7 @@ import {
   Sparkles,
   Check,
 } from "lucide-react";
-import { useOfficeEditStore } from "@/stores/officeEditStore";
+import { useOfficeEditStore, avatarIds } from "@/stores/officeEditStore";
 import { useGameStore, selectAgents } from "@/stores/gameStore";
 import { PERSISTENT_IDS } from "@/systems/persistentIdentities";
 import { OFFICE_CHARACTERS, displayNameFromSlug } from "@/themes/w17ant-cast";
@@ -38,7 +38,7 @@ export function EditToolbar() {
   const avatarValue = useOfficeEditStore((s) =>
     selectedEntityId ? (s.overrides[selectedEntityId]?.avatar ?? "") : "",
   );
-  const isAgent = selectedEntityId ? agentsMap.has(selectedEntityId) || PERSISTENT_IDS.has(selectedEntityId) : false;
+  const isAgent = selectedEntityId ? agentsMap.has(selectedEntityId) || PERSISTENT_IDS.has(selectedEntityId) || avatarIds.has(selectedEntityId) : false;
   const deleteEntity = useOfficeEditStore((s) => s.deleteEntity);
   const resetAllEdits = useOfficeEditStore((s) => s.resetAllEdits);
   const insertedEntities = useOfficeEditStore((s) => s.insertedEntities);
