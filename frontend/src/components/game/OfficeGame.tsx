@@ -313,18 +313,19 @@ function agentDisplayPosition(agent: {
   desk?: number | null;
   currentPosition: { x: number; y: number };
 }): { x: number; y: number } {
-  // Issue 226 R5: the two Sol gateway characters always sit at their own
-  // corner workstations, outside the normal desk pool.
+  // Issue 226 R6l (Sol sign-off loop, operator: "someone standing on desk"):
+  // the DESK renders at its anchor; the CHARACTER is drawn STAND_DESK_FORWARD
+  // px below that anchor so the workstation (monitors in the desk sprite's
+  // upper half) sits BEHIND them - the classic standing-desk read. Without
+  // this offset the desk sprite is painted across the character's body.
   if (agent.name && SOL_SEATS[agent.name]) {
-    return SOL_SEATS[agent.name];
+    const s = SOL_SEATS[agent.name];
+    return { x: s.x, y: s.y + STAND_DESK_FORWARD };
   }
-  // Any agent with an assigned desk is ALWAYS drawn at that workstation. This
-  // is deterministic and immune to arrival/animation timing: a fresh load can
-  // never leave an assigned agent invisible at a spawn point. Agents the
-  // backend did not desk get a computed free workstation (issue 226 R5).
   const deskNum = deskAssignmentCache.get(agent.id) ?? agent.desk;
   if (deskNum) {
-    return getSpotForDesk(deskNum).position;
+    const seat = getSpotForDesk(deskNum).position;
+    return { x: seat.x, y: seat.y + STAND_DESK_FORWARD };
   }
   return agent.currentPosition;
 }
@@ -366,6 +367,9 @@ function agentStateGlyph(agent: {
  * are ALWAYS present - they are infrastructure, not sessions.
  */
 const IDLE_TIMEOUT_MS = 10 * 60 * 1000;
+
+/** How far forward of the desk anchor a standing character is drawn. */
+const STAND_DESK_FORWARD = 40;
 const ALWAYS_PRESENT = new Set([
   "Sol Docker",
   "Sol Webserver",
