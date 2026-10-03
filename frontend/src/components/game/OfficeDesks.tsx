@@ -193,6 +193,50 @@ function DecorSprite({
  * art set ships no couch/bed, so the lounge is drawn procedurally (dark-mode
  * palette) and the biggest upstream props are added around it.
  */
+/**
+ * Issue 246 follow-up: the lounge pieces are raw Graphics, so they could not be
+ * selected or removed. LoungePiece wraps one piece in EditableSprite (select,
+ * drag, turn = mirror, delete) and offsets the original absolute-coordinate
+ * drawing so it still renders at the same spot by default.
+ */
+function LoungePiece({
+  id,
+  name,
+  bx,
+  by,
+  bw,
+  bh,
+  zBias,
+  children,
+}: {
+  id: string;
+  name: string;
+  bx: number;
+  by: number;
+  bw: number;
+  bh: number;
+  zBias: number;
+  children: ReactNode;
+}): ReactNode {
+  const turn = useEntityTurn(id);
+  return (
+    <EditableSprite
+      id={id}
+      name={name}
+      defaultX={bx + bw / 2}
+      defaultY={by + bh}
+      width={bw}
+      height={bh}
+      flip={turn % 2 === 1}
+      zBias={zBias}
+    >
+      <pixiContainer x={-(bx + bw / 2)} y={-(by + bh / 2)}>
+        {children}
+      </pixiContainer>
+    </EditableSprite>
+  );
+}
+
 function Lounge(): ReactNode {
   // Sol turn-8 spec, verbatim: deliberately HARD-EDGED pixel art, rectangles
   // only (no rounded rects, no alpha, no gradients), palette taken from the
@@ -200,7 +244,8 @@ function Lounge(): ReactNode {
   return (
     <>
       {/* RUG: blocky stepped corners, 4px border band, opaque fills */}
-      <pixiGraphics
+      <LoungePiece id="lounge-rug" name="Lounge Rug" bx={530} by={392} bw={220} bh={116} zBias={-2000}>
+        <pixiGraphics
         draw={(g) => {
           g.clear();
           // stepped outer plate (6-8px steps)
@@ -214,8 +259,10 @@ function Lounge(): ReactNode {
           g.fill(0x31465e); // inner field
         }}
       />
+      </LoungePiece>
       {/* SOFA: back (14px), body, arms (18px), seat front, shadow, highlight */}
-      <pixiGraphics
+      <LoungePiece id="lounge-sofa" name="Lounge Sofa" bx={558} by={402} bw={164} bh={52} zBias={-1500}>
+        <pixiGraphics
         draw={(g) => {
           g.clear();
           g.rect(558, 402, 164, 14);
@@ -232,8 +279,10 @@ function Lounge(): ReactNode {
           g.fill(0x283849); // right arm
         }}
       />
+      </LoungePiece>
       {/* COFFEE TABLE: hard rects, four short pixel legs */}
-      <pixiGraphics
+      <LoungePiece id="lounge-table" name="Coffee Table" bx={594} by={465} bw={92} bh={36} zBias={-1400}>
+        <pixiGraphics
         draw={(g) => {
           g.clear();
           g.rect(594, 465, 92, 26);
@@ -247,6 +296,7 @@ function Lounge(): ReactNode {
           g.fill(0x4e382b); // legs
         }}
       />
+      </LoungePiece>
     </>
   );
 }
