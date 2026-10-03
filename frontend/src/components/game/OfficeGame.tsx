@@ -1019,7 +1019,12 @@ export function OfficeGame(): ReactNode {
   }, [agents]);
 
   return (
-    <div ref={containerRef} className="w-full h-full overflow-hidden relative">
+    <div ref={containerRef} className="w-full h-full overflow-hidden relative flex flex-col">
+      {/* Issue 246 follow-up: the edit toolbar is an in-flow top strip above
+          the canvas (never an overlay), so it cannot cover the room on small
+          screens. It renders only in edit mode. */}
+      <EditToolbar />
+      <div className="flex-1 min-h-0 relative">
       <TransformWrapper
         ref={transformRef}
         initialScale={1}
@@ -1042,8 +1047,7 @@ export function OfficeGame(): ReactNode {
         }}
       >
         <ZoomControls />
-        {/* Issue 246: edit-mode HUD (toolbar + insert palette). */}
-        <EditToolbar />
+        {/* Issue 246: insert palette (overlay panel; closes after use). */}
         <SpritePalette />
         <TransformComponent
           wrapperClass="w-full h-full"
@@ -1515,6 +1519,7 @@ export function OfficeGame(): ReactNode {
           </div>
         </TransformComponent>
       </TransformWrapper>
+      </div>
     </div>
   );
 }
