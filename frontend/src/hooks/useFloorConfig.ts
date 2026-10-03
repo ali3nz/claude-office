@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { useNavigationStore } from "@/stores/navigationStore";
 import { apiFetch, initApiKeyFromBrowser } from "@/utils/api";
+import { applyPendingArea, initLayoutSync } from "@/systems/layoutSync";
 import { LOBBY_FLOOR_ID } from "@/types/navigation";
 
 // Issue 246: persisted room/area choice (Settings -> Office Layout).
@@ -25,6 +26,8 @@ export function useFloorConfig(): void {
     // Issue 246: this effect runs before page.tsx's key-intake effect, and the
     // floors request needs the API key - load it here first (idempotent).
     initApiKeyFromBrowser();
+    // Issue 246 follow-up: shared layout sync (server copy wins when newer).
+    void initLayoutSync();
     setLoading(true);
     apiFetch("/api/v1/floors")
       .then((res) => res.json())
@@ -64,6 +67,10 @@ export function useFloorConfig(): void {
         } catch {
           // Private mode / no storage: keep the default view.
         }
+
+        // Issue 246 follow-up: the shared layout may carry an area chosen on
+        // another screen (homepage embed); apply it once the floors are known.
+        applyPendingArea();
       })
       .catch(() => {
         setBuildingConfig({ buildingName: "Building", floors: [] });

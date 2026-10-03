@@ -40,6 +40,69 @@ export interface InsertedSprite {
 const STORAGE_KEY_EDIT_MODE = "claude-office-edit-mode";
 const STORAGE_KEY_OVERRIDES = "claude-office-edit-overrides";
 const STORAGE_KEY_INSERTED = "claude-office-inserted-sprites";
+const STORAGE_KEY_LAYOUT_AT = "claude-office-layout-updated-at";
+const STORAGE_KEY_AREA = "claude-office-floor";
+
+/**
+ * Shared layout (issue 246 follow-up): the arrangement is published to the
+ * backend so the homepage embed (a different origin, with its own
+ * localStorage) shows the same office as the operator's desktop.
+ */
+export interface SharedLayout {
+  version: 1;
+  /** Epoch ms of the last local edit / publish; newest wins across devices. */
+  updatedAt: number;
+  overrides: Record<string, EntityOverride>;
+  inserted: InsertedSprite[];
+  /** Selected room/area id, so every screen shows the same room. */
+  area?: string;
+}
+
+function saveLayoutUpdatedAt(at: number): void {
+  try {
+    window.localStorage.setItem(STORAGE_KEY_LAYOUT_AT, String(at));
+  } catch {
+    // ignore
+  }
+}
+
+/** Epoch ms of the last local layout change (0 when unknown/legacy). */
+export function readLayoutUpdatedAt(): number {
+  if (typeof window === "undefined") return 0;
+  try {
+    return Number(window.localStorage.getItem(STORAGE_KEY_LAYOUT_AT)) || 0;
+  } catch {
+    return 0;
+  }
+}
+
+/**
+ * The browser's current layout, or null when there is nothing to share yet.
+ * Used by systems/layoutSync to seed the server and to publish edits.
+ */
+export function readLocalLayout(): SharedLayout | null {
+  const overrides = readInitialOverrides();
+  const inserted = readInitialInserted();
+  const at = readLayoutUpdatedAt();
+  // A timestamp alone still counts: it means "cleared by the operator", which
+  // must propagate (Reset clears every screen).
+  if (Object.keys(overrides).length === 0 && inserted.length === 0 && at === 0) {
+    return null;
+  }
+  let area: string | undefined;
+  try {
+    area = window.localStorage.getItem(STORAGE_KEY_AREA) ?? undefined;
+  } catch {
+    area = undefined;
+  }
+  return {
+    version: 1,
+    updatedAt: at,
+    overrides,
+    inserted,
+    ...(area ? { area } : {}),
+  };
+}
 
 function readInitialEditMode(): boolean {
   if (typeof window === "undefined") return false;
@@ -93,6 +156,8 @@ function saveEditMode(enabled: boolean): void {
 function saveOverrides(overrides: Record<string, EntityOverride>): void {
   try {
     window.localStorage.setItem(STORAGE_KEY_OVERRIDES, JSON.stringify(overrides));
+    // Every persisted change bumps the layout timestamp (newest wins).
+    saveLayoutUpdatedAt(Date.now());
   } catch {
     // ignore
   }
@@ -101,6 +166,7 @@ function saveOverrides(overrides: Record<string, EntityOverride>): void {
 function saveInserted(inserted: InsertedSprite[]): void {
   try {
     window.localStorage.setItem(STORAGE_KEY_INSERTED, JSON.stringify(inserted));
+    saveLayoutUpdatedAt(Date.now());
   } catch {
     // ignore
   }
@@ -127,6 +193,8 @@ interface OfficeEditState {
   removeInsertedEntity: (id: string) => void;
   setIsDragging: (dragging: boolean) => void;
   resetAllEdits: () => void;
+  /** Apply a layout received from the backend (see systems/layoutSync). */
+  applySharedLayout: (layout: SharedLayout) => void;
 }
 
 export const useOfficeEditStore = create<OfficeEditState>((set, get) => ({
@@ -292,6 +360,31 @@ export const useOfficeEditStore = create<OfficeEditState>((set, get) => ({
     set({ isDragging: dragging });
   },
 
+  /**
+   * Apply a layout received from the backend (issue 246 follow-up). Sets the
+   * local cache to the published arrangement WITHOUT bumping the timestamp, so
+   * the sync layer does not echo it straight back to the server.
+   */
+  applySharedLayout: (layout: SharedLayout) => {
+    const overrides = layout.overrides ?? {};
+    const inserted = Array.isArray(layout.inserted) ? layout.inserted : [];
+    saveOverrides(overrides);
+    saveInserted(inserted);
+    saveLayoutUpdatedAt(layout.updatedAt ?? Date.now());
+    try {
+      if (layout.area) {
+        window.localStorage.setItem(STORAGE_KEY_AREA, layout.area);
+      }
+    } catch {
+      // ignore
+    }
+    set({
+      overrides,
+      insertedEntities: inserted,
+      selectedEntityId: null,
+    });
+  },
+
   resetAllEdits: () => {
     try {
       window.localStorage.removeItem(STORAGE_KEY_OVERRIDES);
@@ -299,6 +392,8 @@ export const useOfficeEditStore = create<OfficeEditState>((set, get) => ({
     } catch {
       // ignore
     }
+    // Bump the timestamp so the reset also clears the shared server layout.
+    saveLayoutUpdatedAt(Date.now());
     set({
       overrides: {},
       insertedEntities: [],

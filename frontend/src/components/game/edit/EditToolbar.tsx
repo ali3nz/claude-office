@@ -14,6 +14,7 @@ import { useEffect, useCallback } from "react";
 import {
   RotateCw,
   RotateCcw,
+  Share2,
   Plus,
   Trash2,
   X,
@@ -23,6 +24,7 @@ import {
 import { useOfficeEditStore, avatarIds } from "@/stores/officeEditStore";
 import { useGameStore, selectAgents } from "@/stores/gameStore";
 import { PERSISTENT_IDS } from "@/systems/persistentIdentities";
+import { publishCurrentLayout } from "@/systems/layoutSync";
 import { OFFICE_CHARACTERS, displayNameFromSlug } from "@/themes/w17ant-cast";
 
 export function EditToolbar() {
@@ -65,6 +67,10 @@ export function EditToolbar() {
       resetAllEdits();
     }
   }, [resetAllEdits]);
+
+  const handlePublish = useCallback(() => {
+    publishCurrentLayout();
+  }, []);
 
   // Keyboard shortcut: Delete or Backspace key removes selected inserted sprite
   useEffect(() => {
@@ -204,6 +210,16 @@ export function EditToolbar() {
           </button>
         </div>
       )}
+
+      {/* Publish: share this arrangement with every screen (homepage embed) */}
+      <button
+        onClick={handlePublish}
+        className="flex items-center gap-1 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-sky-400 font-bold rounded-lg border border-sky-500/30 transition-colors"
+        title="Publish this layout to every screen (homepage embed, other devices)"
+      >
+        <Share2 size={14} />
+        <span>Publish</span>
+      </button>
 
       {/* Reset: undo every edit (restores deleted objects, positions, facings) */}
       <button

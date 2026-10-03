@@ -237,8 +237,18 @@ class RoomOrchestrator:
         first_entry = next(iter(self._sessions.values()))
         first_state = first_entry.sm.to_game_state(first_entry.session_id)
 
-        merged_agents: list[Agent] = []
-        seated = 0
+        # Stable desk assignment (issue 246 follow-up): each character keeps
+        # the SAME workstation for as long as it is present; a new arrival
+        # takes the lowest free workstation; a departure frees its desk for
+        # the next arrival. Previously the desk number was recomputed from
+        # insertion order on every build, so agents swapped desks whenever
+        # another session came or went.
+        assignments: dict[str, int] = getattr(self, "_desk_assignments", {})
+        self._desk_assignments = assignments
+
+        # (stable key, agent) pairs in deterministic arrival order.
+        present: list[tuple[str, Agent]] = []
+
         # Persistent identities (the two ai-agents + the two catgpt gateways)
         # always take a seat first so the cap never drops them.
         def _is_persistent(sid: str) -> bool:
@@ -249,16 +259,11 @@ class RoomOrchestrator:
             key=lambda kv: (0 if _is_persistent(kv[0]) else 1),
         )
         for session_id, entry in ordered:
-            if seated >= OFFICE_MAX_SEATED:
-                break
             state = entry.sm.to_game_state(session_id)
             session_agents = list(state.agents)
             is_gateway = any(k in session_id for k in GATEWAY_NAMES)
             if session_agents:
                 for agent in session_agents:
-                    if seated >= OFFICE_MAX_SEATED:
-                        break
-                    seated += 1
                     # Issue 226 R1: subagent characters are named
                     # 'sub-<conversation name>' unless they are the fixed
                     # gateway identities.
@@ -269,35 +274,67 @@ class RoomOrchestrator:
                         # operator wants "sub-<first 10 chars>"; without one we
                         # keep the agent's own (curated) name.
                         name = office_subagent_name(session_id, title)
-                    merged_agents.append(
-                        agent.model_copy(
-                            update={
-                                "character_type": "subagent",
-                                "parent_session_id": session_id,
-                                "number": seated,
-                                "desk": seated,
-                                "name": name,
-                            }
+                    present.append(
+                        (
+                            str(agent.id),
+                            agent.model_copy(
+                                update={
+                                    "character_type": "subagent",
+                                    "parent_session_id": session_id,
+                                    "name": name,
+                                }
+                            ),
                         )
                     )
             else:
-                seated += 1
-                merged_agents.append(
-                    Agent(
-                        id=f"off-{session_id[:10]}",
-                        name=office_session_name(session_id, entry.sm.display_name),
-                        color=_TEAMMATE_COLORS[(seated - 1) % len(_TEAMMATE_COLORS)],
-                        number=seated,
-                        state=_BOSS_TO_AGENT.get(
-                            state.boss.state, AgentState.WORKING
+                present.append(
+                    (
+                        f"off-{session_id[:10]}",
+                        Agent(
+                            id=f"off-{session_id[:10]}",
+                            name=office_session_name(
+                                session_id, entry.sm.display_name
+                            ),
+                            number=0,
+                            state=_BOSS_TO_AGENT.get(
+                                state.boss.state, AgentState.WORKING
+                            ),
+                            desk=0,
+                            bubble=state.boss.bubble,
+                            current_task=state.boss.current_task,
+                            character_type="teammate",
+                            parent_session_id=session_id,
                         ),
-                        desk=seated,
-                        bubble=state.boss.bubble,
-                        current_task=state.boss.current_task,
-                        character_type="teammate",
-                        parent_session_id=session_id,
                     )
                 )
+
+        # Release the desks of characters that are gone, then fill the free
+        # desks for new arrivals in arrival order.
+        present_keys = {key for key, _ in present}
+        kept = {key: desk for key, desk in assignments.items() if key in present_keys}
+        used = set(kept.values())
+        for key, _ in present:
+            if key in kept:
+                continue
+            free = next(
+                (d for d in range(1, OFFICE_MAX_SEATED + 1) if d not in used), None
+            )
+            if free is None:
+                continue  # floor full - the character stays off the floor
+            kept[key] = free
+            used.add(free)
+        self._desk_assignments = kept
+
+        merged_agents: list[Agent] = []
+        for key, agent in present:
+            desk = kept.get(key)
+            if desk is None:
+                continue
+            update: dict[str, object] = {"number": desk, "desk": desk}
+            if agent.character_type == "teammate":
+                # Session-level characters keep a stable colour per desk.
+                update["color"] = _TEAMMATE_COLORS[(desk - 1) % len(_TEAMMATE_COLORS)]
+            merged_agents.append(agent.model_copy(update=update))
 
         desk_count = max(8, len(merged_agents) + 2)
         return GameState(
