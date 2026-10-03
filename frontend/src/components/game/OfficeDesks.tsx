@@ -13,6 +13,7 @@
 
 import { type ReactNode } from "react";
 import { usePixiTexture } from "@/hooks/usePixiTexture";
+import { artToCanvas } from "@/themes/w17ant-spots";
 import {
   DESKS,
   BOSS_DESK,
@@ -76,6 +77,59 @@ export function DeskCluster({
         const paired = DESKS[SEAT_TO_DESK_INDEX[i]] ?? desk;
         return <DeskSprite key={`desk-${i}`} desk={paired} />;
       })}
+    </>
+  );
+}
+
+/**
+ * Issue 226 R6b (operator: "any cool stuff you can put in the middle"): the
+ * upstream room decoration, at the positions the upstream authors placed it.
+ * Heights follow the same room->canvas scale as the desks. Presentation only.
+ */
+const DECOR: { path: string; art: [number, number]; h: number }[] = [
+  { path: "/sprites/decoration/monstera-plant.png", art: [43.2, 37.9], h: 71 },
+  { path: "/sprites/decoration/snake-plant.png", art: [32.0, 71.2], h: 63 },
+  { path: "/sprites/decoration/money-tree.png", art: [60.2, 80.4], h: 63 },
+  { path: "/sprites/decoration/printer.png", art: [85.4, 56.8], h: 69 },
+];
+
+const ART_PER_ROOM = 1.5;
+const ROOM_SCALE = 1024 / 896;
+
+function DecorSprite({
+  path,
+  art,
+  h,
+}: {
+  path: string;
+  art: [number, number];
+  h: number;
+}): ReactNode {
+  const texture = usePixiTexture(path);
+  if (!texture) return null;
+  const pos = artToCanvas((art[0] / 100) * 1200, (art[1] / 100) * 896);
+  const height = h * ART_PER_ROOM * ROOM_SCALE;
+  const width = (texture.width / texture.height) * height;
+  return (
+    <pixiSprite
+      texture={texture}
+      anchor={{ x: 0.5, y: 1 }}
+      x={pos.x}
+      y={pos.y}
+      width={width}
+      height={height}
+      zIndex={pos.y - 400}
+    />
+  );
+}
+
+/** Room dressing for the empty middle of the floor. */
+export function OfficeDecor(): ReactNode {
+  return (
+    <>
+      {DECOR.map((d, i) => (
+        <DecorSprite key={`decor-${i}`} path={d.path} art={d.art} h={d.h} />
+      ))}
     </>
   );
 }

@@ -113,7 +113,12 @@ import {
 import { ZoomControls } from "./ZoomControls";
 import { LoadingScreen } from "./LoadingScreen";
 import { OfficeBackground } from "./OfficeBackground";
-import { DeskCluster, SolDesks, BossDesk } from "./OfficeDesks";
+import {
+  DeskCluster,
+  SolDesks,
+  BossDesk,
+  OfficeDecor,
+} from "./OfficeDesks";
 import {
   W17ANT_CAST_MODE,
   type OfficeFacing,
@@ -386,17 +391,13 @@ let deskAssignmentCache = new Map<string, number>();
 /** Dedicated corner seat per Sol gateway character (issue 226 R5). */
 const SOL_SEATS: Record<string, { x: number; y: number }> = PINNED_SEATS;
 
-/**
- * Issue 226 R6 (operator: "the agents should never be facing the wall"): the
- * W17ant seat list contains rear facings (back to camera). At rest we always
- * use the FRONT variant of the same diagonal so every character looks into
- * the room / at the viewer.
+/*
+ * Issue 226 R6b (operator: "why not face their computer"): the W17ant seat
+ * facing is authored to point AT that seat's workstation, so it is used
+ * verbatim now that seats are paired with their real desks. Forcing every
+ * facing to the camera (R6) made the characters face away from their
+ * monitors - the "facing the wall" defect.
  */
-function faceFront(facing: OfficeFacing): OfficeFacing {
-  if (facing === "rear-left") return "front-left";
-  if (facing === "rear-right") return "front-right";
-  return facing;
-}
 
 /** Seat facing for an agent (Sol characters face into the room). */
 function seatFacingFor(agent: {
@@ -409,7 +410,7 @@ function seatFacingFor(agent: {
   if (agent.name === "GhostReporting") return "front-right";
   if (agent.name === "TruFreedom") return "front-left";
   const deskNum = deskAssignmentCache.get(agent.id) ?? agent.desk;
-  if (deskNum) return faceFront(getSpotForDesk(deskNum).facing);
+  if (deskNum) return getSpotForDesk(deskNum).facing;
   return undefined;
 }
 
@@ -933,6 +934,7 @@ export function OfficeGame(): ReactNode {
                     {/* W17ant workstations (desks with computers), z-sorted with agents */}
                     {W17ANT_CAST_MODE && (
                       <>
+                        <OfficeDecor />
                         <DeskCluster occupied={occupiedDeskNumbers} />
                         {/* Issue 226 R5: boss + pinned desks live INSIDE the
                             y-sorted layer (they used to render after it, so
