@@ -65,6 +65,7 @@ import {
   PINNED_SEATS,
 } from "@/themes/w17ant-spots";
 import { setBehavior, tickBehaviors, getOffset } from "@/systems/officeBehavior";
+import type { AgentAnimationState } from "@/stores/slices/types";
 import { coMark } from "@/utils/coMark";
 import {
   CANVAS_WIDTH,
@@ -402,6 +403,15 @@ let deskAssignmentCache = new Map<string, number>();
 /** Dedicated corner seat per Sol gateway character (issue 226 R5). */
 const SOL_SEATS: Record<string, { x: number; y: number }> = PINNED_SEATS;
 
+/**
+ * Issue 226 R7 (operator: "true freedom is there ghost is gone"): the backend
+ * room drops a session between event bursts, so the two ai- identities (and
+ * the Sols) flickered on and off. Cache the last seen state of every persistent
+ * identity and re-render it when the feed goes quiet - same agent id (so the
+ * avatar is identical), same pinned seat, always present.
+ */
+const persistentIdentityCache = new Map<string, AgentAnimationState>();
+
 /*
  * Issue 226 R6b (operator: "why not face their computer"): the W17ant seat
  * facing is authored to point AT that seat's workstation, so it is used
@@ -678,13 +688,29 @@ export function OfficeGame(): ReactNode {
     const id = window.setInterval(() => setIdleTick(Date.now()), 30_000);
     return () => window.clearInterval(id);
   }, []);
-  const visibleAgents = useMemo(
-    () =>
-      Array.from(agents.values()).filter((a) =>
-        isRecentlyActive(a, idleTick),
-      ),
-    [agents, idleTick],
-  );
+  const visibleAgents = useMemo(() => {
+    const real = Array.from(agents.values()).filter((a) =>
+      isRecentlyActive(a, idleTick),
+    );
+    // Issue 226 R7: the four persistent identities never flicker - remember
+    // each one's last real state and stand it back on the floor if the room
+    // feed drops it (identical id => identical avatar; pinned seat unchanged).
+    const present = new Set<string>();
+    for (const a of real) {
+      if (a.name && PINNED_SEATS[a.name]) {
+        persistentIdentityCache.set(a.name, a);
+        present.add(a.name);
+      }
+    }
+    const standIns: typeof real = [];
+    for (const name of Object.keys(PINNED_SEATS)) {
+      if (!present.has(name)) {
+        const cached = persistentIdentityCache.get(name);
+        if (cached) standIns.push(cached);
+      }
+    }
+    return [...real, ...standIns];
+  }, [agents, idleTick]);
 
   // Issue 226 R5 (operator): render only OCCUPIED desks, and only the desks
   // belonging to pinned identities that are actually on the floor.
