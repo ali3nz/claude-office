@@ -96,7 +96,9 @@ function WhiteboardFrame({
 
   return (
     <pixiContainer
-      eventMode={interactive ? "static" : "none"}
+      // Always static: in edit mode the frame stays hit-testable so the click
+      // bubbles to the edit layer (select/drag) instead of vanishing.
+      eventMode="static"
       onPointerDown={interactive ? onPointerDown : undefined}
     >
       <pixiGraphics draw={drawWhiteboard} />

@@ -94,7 +94,9 @@ export function WallClock({
 
   return (
     <pixiContainer
-      eventMode={interactive ? "static" : "none"}
+      // Always static: in edit mode the clock stays hit-testable so the click
+      // bubbles to the edit layer (select/drag) instead of vanishing.
+      eventMode="static"
       cursor={interactive ? "pointer" : "default"}
       onPointerDown={interactive ? handleClick : undefined}
     >
