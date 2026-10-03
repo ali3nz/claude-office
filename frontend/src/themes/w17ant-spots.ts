@@ -253,7 +253,10 @@ export const BOSS_DESK: DeskFurniture = {
   // is anchored at his seat (PINNED_SEATS["Sol Docker"] = 640,958) so he reads
   // as standing AT it rather than in front of a desk far behind him.
   position: {
+    // Sol verdict 2026-10-03: he stays at the bottom-centre desk with the
+    // REAR sprite, which is the correct visual language for facing a monitor.
+    // The desk anchors ABOVE his seat so the screens render in front of him.
     x: BOSS_RUG_POSITION.x,
-    y: 905 + 6,
+    y: 905 - 74,
   },
 };

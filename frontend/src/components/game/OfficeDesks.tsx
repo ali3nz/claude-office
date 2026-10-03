@@ -205,7 +205,6 @@ function Lounge(): ReactNode {
 export function OfficeDecor(): ReactNode {
   return (
     <>
-      <Lounge />
       {DECOR.map((d, i) => (
         <DecorSprite key={`decor-${i}`} path={d.path} art={d.art} h={d.h} />
       ))}
