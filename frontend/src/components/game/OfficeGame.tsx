@@ -124,7 +124,10 @@ import { SpritePalette } from "./edit/SpritePalette";
 import { EditableSprite } from "./edit/EditableSprite";
 import { useEditDrag } from "./edit/useEditDrag";
 import { usePixiTexture } from "@/hooks/usePixiTexture";
-import { spriteCatalogItemByPath } from "@/constants/spriteCatalog";
+import {
+  spriteCatalogItemByPath,
+  interactiveSpriteKind,
+} from "@/constants/spriteCatalog";
 import { turnedSprite } from "@/systems/facingCycle";
 import {
   useOfficeEditStore,
@@ -662,9 +665,39 @@ function BehaviorGroup({
  * rotatable like every other office sprite.
  */
 function InsertedSpriteView({ entity }: { entity: InsertedSprite }): ReactNode {
+  const isEditMode = useOfficeEditStore((s) => s.isEditMode);
+  const todos = useGameStore(selectTodos);
+  // Interactive insertables (issue 246 follow-up): component-backed objects.
+  const kind = interactiveSpriteKind(entity.spritePath);
   // Facing change: next facing variant (desks, cast) or a mirror (others).
   const turned = turnedSprite(entity.spritePath, entity.turn ?? 0);
-  const texture = usePixiTexture(turned.path);
+  const texture = usePixiTexture(kind ? null : turned.path);
+
+  if (kind) {
+    // Whiteboard 330x205, wall clock ~108 square; EditableSprite centres
+    // children on the box, so each component is offset to its own centre.
+    const width = kind === "whiteboard" ? 330 : 108;
+    const height = kind === "whiteboard" ? 205 : 108;
+    return (
+      <EditableSprite
+        id={entity.id}
+        name={entity.name}
+        defaultX={entity.x}
+        defaultY={entity.y}
+        width={width}
+        height={height}
+      >
+        {kind === "whiteboard" ? (
+          <pixiContainer x={-165} y={-102.5}>
+            <Whiteboard todos={todos} interactive={!isEditMode} />
+          </pixiContainer>
+        ) : (
+          <WallClock interactive={!isEditMode} />
+        )}
+      </EditableSprite>
+    );
+  }
+
   if (!texture) return null;
   // Issue 246 review I4: prefer the catalog's display height for the sprite;
   // the raw texture height over/under-sizes assets.

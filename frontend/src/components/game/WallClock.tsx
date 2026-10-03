@@ -10,8 +10,15 @@ import { DigitalClock } from "./DigitalClock";
  *
  * Displays current time in analog or digital format based on user preferences.
  * Click to cycle through: analog → digital 12h → digital 24h → analog
+ *
+ * `interactive={false}` (edit mode) makes the clock ignore clicks so the edit
+ * layer owns them (select/drag) - issue 246 follow-up.
  */
-export function WallClock(): ReactNode {
+export function WallClock({
+  interactive = true,
+}: {
+  interactive?: boolean;
+} = {}): ReactNode {
   const [time, setTime] = useState(new Date());
   const clockType = usePreferencesStore((s) => s.clockType);
   const clockFormat = usePreferencesStore((s) => s.clockFormat);
@@ -87,9 +94,9 @@ export function WallClock(): ReactNode {
 
   return (
     <pixiContainer
-      eventMode="static"
-      cursor="pointer"
-      onPointerDown={handleClick}
+      eventMode={interactive ? "static" : "none"}
+      cursor={interactive ? "pointer" : "default"}
+      onPointerDown={interactive ? handleClick : undefined}
     >
       {clockType === "analog" ? (
         <pixiGraphics draw={drawAnalogClock} />

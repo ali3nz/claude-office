@@ -46,6 +46,7 @@ interface WhiteboardFrameProps {
   children: ReactNode;
   onPointerDown: () => void;
   mode: WhiteboardMode;
+  interactive?: boolean;
 }
 
 /** Marker colors drawn in the whiteboard tray (red, green, blue). */
@@ -55,6 +56,7 @@ function WhiteboardFrame({
   children,
   onPointerDown,
   mode,
+  interactive = true,
 }: WhiteboardFrameProps): ReactNode {
   const drawWhiteboard = useCallback((g: Graphics) => {
     g.clear();
@@ -93,7 +95,10 @@ function WhiteboardFrame({
   const modeInfo = MODE_INFO[mode];
 
   return (
-    <pixiContainer eventMode="static" onPointerDown={onPointerDown}>
+    <pixiContainer
+      eventMode={interactive ? "static" : "none"}
+      onPointerDown={interactive ? onPointerDown : undefined}
+    >
       <pixiGraphics draw={drawWhiteboard} />
 
       {/* Header - rendered at 2x for sharpness */}
@@ -138,9 +143,11 @@ function WhiteboardFrame({
 
 export interface WhiteboardProps {
   todos: TodoItem[];
+  /** False in edit mode: clicks belong to the edit layer (select/drag). */
+  interactive?: boolean;
 }
 
-export function Whiteboard({ todos }: WhiteboardProps): ReactNode {
+export function Whiteboard({ todos, interactive = true }: WhiteboardProps): ReactNode {
   const whiteboardData = useGameStore((s) => s.whiteboardData);
   const whiteboardMode = useGameStore((s) => s.whiteboardMode);
   const cycleMode = useGameStore((s) => s.cycleWhiteboardMode);
@@ -150,6 +157,8 @@ export function Whiteboard({ todos }: WhiteboardProps): ReactNode {
 
   // Keyboard hotkeys: T = Todo List (0), B = Background Tasks (1), 0-9 = modes
   useEffect(() => {
+    // Edit mode: the board is being placed, not used - don't grab hotkeys.
+    if (!interactive) return;
     const handleKeyDown = (e: KeyboardEvent) => {
       // Ignore if typing in an input field
       if (
@@ -183,7 +192,7 @@ export function Whiteboard({ todos }: WhiteboardProps): ReactNode {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [setMode]);
+  }, [setMode, interactive]);
 
   // Convert agent animation state to basic Agent interface for OrgChart
   const agentList: Agent[] = useMemo(
@@ -238,7 +247,11 @@ export function Whiteboard({ todos }: WhiteboardProps): ReactNode {
   };
 
   return (
-    <WhiteboardFrame onPointerDown={handleClick} mode={whiteboardMode}>
+    <WhiteboardFrame
+      onPointerDown={handleClick}
+      mode={whiteboardMode}
+      interactive={interactive}
+    >
       {renderMode()}
     </WhiteboardFrame>
   );

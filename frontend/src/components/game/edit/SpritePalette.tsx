@@ -156,13 +156,19 @@ export function SpritePalette() {
                     title={`Tap to insert at center, or drag onto the floor (desktop)`}
                   >
                     <div className="h-14 w-full flex items-center justify-center overflow-hidden mb-1">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={item.spritePath}
-                        alt={item.name}
-                        className="max-h-12 max-w-full object-contain pointer-events-none drop-shadow"
-                        loading="lazy"
-                      />
+                      {item.category === "interactive" ? (
+                        <div className="text-3xl drop-shadow select-none">
+                          {item.id === "interactive-whiteboard" ? "📋" : "🕐"}
+                        </div>
+                      ) : (
+                        /* eslint-disable-next-line @next/next/no-img-element */
+                        <img
+                          src={item.spritePath}
+                          alt={item.name}
+                          className="max-h-12 max-w-full object-contain pointer-events-none drop-shadow"
+                          loading="lazy"
+                        />
+                      )}
                     </div>
                     <span className="text-[11px] font-medium text-slate-300 text-center line-clamp-1 w-full px-1">
                       {item.name}

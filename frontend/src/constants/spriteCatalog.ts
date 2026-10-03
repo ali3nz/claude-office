@@ -365,7 +365,42 @@ export const SPRITE_CATALOG_GROUPS: SpriteFolderGroup[] = [
       },
     ],
   },
+  {
+    // Issue 246 follow-up (operator): the office's clickable displays become
+    // insertable objects. These paths are markers, not real image files: the
+    // inserted-sprite renderer swaps in the live component.
+    folder: "interactive",
+    title: "Interactive",
+    items: [
+      {
+        id: "interactive-whiteboard",
+        name: "Interactive Whiteboard",
+        category: "interactive",
+        spritePath: "/sprites/interactive/whiteboard",
+        defaultHeight: 205,
+      },
+      {
+        id: "interactive-wall-clock",
+        name: "Interactive Wall Clock",
+        category: "interactive",
+        spritePath: "/sprites/interactive/wall-clock",
+        defaultHeight: 96,
+      },
+    ],
+  },
 ];
+
+/** Marker prefix for interactive (component-backed) insertables. */
+export const INTERACTIVE_SPRITE_PREFIX = "/sprites/interactive/";
+
+/** Interactive kind for a marker path, or null for a real image sprite. */
+export function interactiveSpriteKind(
+  spritePath: string,
+): "whiteboard" | "wall-clock" | null {
+  if (!spritePath.startsWith(INTERACTIVE_SPRITE_PREFIX)) return null;
+  const kind = spritePath.slice(INTERACTIVE_SPRITE_PREFIX.length);
+  return kind === "whiteboard" || kind === "wall-clock" ? kind : null;
+}
 
 /**
  * Issue 246 review I4: look up a catalog item by its public sprite path so
