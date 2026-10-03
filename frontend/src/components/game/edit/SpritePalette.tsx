@@ -151,8 +151,9 @@ export function SpritePalette() {
                     key={item.id}
                     draggable
                     onDragStart={(e) => handleDragStart(e, item)}
+                    onClick={() => handleQuickInsert(item)}
                     className="group relative flex flex-col items-center justify-center p-2 rounded-lg bg-slate-800/80 border border-slate-700/60 hover:border-purple-500/80 hover:bg-slate-800 cursor-grab active:cursor-grabbing transition-all select-none"
-                    title={`Drag onto floor or click + to insert`}
+                    title={`Tap to insert at center, or drag onto the floor (desktop)`}
                   >
                     <div className="h-14 w-full flex items-center justify-center overflow-hidden mb-1">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -173,7 +174,7 @@ export function SpritePalette() {
                         e.stopPropagation();
                         handleQuickInsert(item);
                       }}
-                      className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 p-1 bg-purple-600 hover:bg-purple-500 text-white rounded shadow transition-opacity"
+                      className="absolute top-1 right-1 p-1 bg-purple-600 hover:bg-purple-500 text-white rounded shadow transition-opacity"
                       title="Insert at center"
                     >
                       <Plus size={10} />
@@ -192,7 +193,7 @@ export function SpritePalette() {
 
       {/* Footer tip */}
       <div className="p-2.5 bg-slate-950/80 border-t border-slate-800 text-[11px] text-slate-400 text-center">
-        💡 Drag sprite to drop on the office canvas
+        💡 Tap a sprite to insert it at the center (drag onto the floor on desktop)
       </div>
     </div>
   );

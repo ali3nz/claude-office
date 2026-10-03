@@ -11,6 +11,7 @@ import {
   X,
   ChevronDown,
   ChevronRight,
+  Settings,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR as dateFnsPtBR, es as dateFnsEs } from "date-fns/locale";
@@ -70,6 +71,8 @@ interface MobileDrawerProps {
   onSimulate: () => Promise<void>;
   onReset: () => void;
   onClearDB: () => void;
+  /** Issue 246 follow-up: mobile must be able to reach Settings (unlock, room/area). */
+  onOpenSettings: () => void;
 }
 
 // ============================================================================
@@ -91,6 +94,7 @@ export function MobileDrawer({
   onSimulate,
   onReset,
   onClearDB,
+  onOpenSettings,
 }: MobileDrawerProps): React.ReactNode {
   const { t, language } = useTranslation();
   const dateFnsLocale =
@@ -174,6 +178,15 @@ export function MobileDrawer({
             >
               <Trash2 size={16} />
               {t("header.clearDb")}
+            </button>
+            {/* Issue 246 follow-up: reach Settings (unlock editing, room/area)
+                from the mobile drawer. */}
+            <button
+              onClick={onOpenSettings}
+              className="flex items-center gap-2 px-3 py-2 bg-sky-500/10 hover:bg-sky-500/20 text-sky-400 border border-sky-500/30 rounded text-sm font-bold transition-colors"
+            >
+              <Settings size={16} />
+              {t("header.settings")}
             </button>
           </div>
 

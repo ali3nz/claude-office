@@ -114,7 +114,7 @@ export function EditToolbar() {
       : null;
 
   return (
-    <div className="absolute top-4 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2 p-1.5 bg-slate-900/90 backdrop-blur-md border border-purple-500/40 rounded-xl shadow-2xl text-xs font-mono select-none">
+    <div className="absolute top-4 left-1/2 -translate-x-1/2 z-40 flex flex-wrap justify-center items-center gap-2 p-1.5 max-w-[calc(100vw-1rem)] bg-slate-900/90 backdrop-blur-md border border-purple-500/40 rounded-xl shadow-2xl text-xs font-mono select-none">
       {/* Edit Mode Badge */}
       <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-500/20 border border-purple-500/30 text-purple-300 font-bold">
         <Sparkles size={14} className="text-purple-400" />

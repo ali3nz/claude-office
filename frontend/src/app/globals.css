@@ -112,6 +112,9 @@ body {
     height: auto !important;
     max-width: 100%;
     max-height: 100%;
+    /* Issue 246 follow-up: let touch-drags on sprites own the gesture on
+       mobile instead of the browser scrolling/zooming the page. */
+    touch-action: none;
     /* Issue 246 review I2: keep the old horizontal centring (object-position:
        top center) - a wide pane would otherwise leave all slack on the right. */
     display: block;

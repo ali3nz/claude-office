@@ -498,6 +498,10 @@ export default function V2TestPage(): React.ReactNode {
           setIsClearModalOpen(true);
           setMobileMenuOpen(false);
         }}
+        onOpenSettings={() => {
+          setIsSettingsModalOpen(true);
+          setMobileMenuOpen(false);
+        }}
       />
 
       {/* ----------------------------------------------------------------
