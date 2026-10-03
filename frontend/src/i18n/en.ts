@@ -289,6 +289,11 @@ const en = {
   "settings.filterError": "Errors and stops",
   "settings.filterTaskComplete": "Task completions",
   "settings.filterArrival": "Agent arrivals",
+  "settings.officeLayout": "Office Layout",
+  "settings.unlockEditing": "Unlock editing",
+  "settings.roomArea": "Room / Area",
+  "settings.areaSingle": "Single View",
+  "settings.areaLobby": "Lobby",
 } as const;
 
 export type TranslationKey = keyof typeof en;

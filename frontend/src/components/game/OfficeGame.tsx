@@ -26,6 +26,7 @@ import {
   useRef,
   useCallback,
   useState,
+  type DragEvent,
   type ReactNode,
 } from "react";
 import { useTick } from "@pixi/react";
@@ -118,6 +119,16 @@ import {
   useDeskPositions,
 } from "./DeskGrid";
 import { ZoomControls } from "./ZoomControls";
+import { EditToolbar } from "./edit/EditToolbar";
+import { SpritePalette } from "./edit/SpritePalette";
+import { EditableSprite } from "./edit/EditableSprite";
+import { useEditDrag } from "./edit/useEditDrag";
+import { usePixiTexture } from "@/hooks/usePixiTexture";
+import { spriteCatalogItemByPath } from "@/constants/spriteCatalog";
+import {
+  useOfficeEditStore,
+  type InsertedSprite,
+} from "@/stores/officeEditStore";
 import { LoadingScreen } from "./LoadingScreen";
 import { OfficeBackground } from "./OfficeBackground";
 import {
@@ -548,19 +559,55 @@ function BehaviorGroup({
   baseX,
   baseY,
   zIndex,
+  editChrome = false,
   children,
 }: {
   id: string;
   baseX: number;
   baseY: number;
   zIndex?: number;
+  /**
+   * Issue 246 review M1: only the sprite layer gets the rotation wrapper and
+   * the selection box; the label/bubble layers follow the override position
+   * but must not rotate with it or draw their own box.
+   */
+  editChrome?: boolean;
   children: ReactNode;
 }): ReactNode {
   const ref = useRef<Container | null>(null);
+  const isEditMode = useOfficeEditStore((s) => s.isEditMode);
+  const isSelected = useOfficeEditStore((s) => s.selectedEntityId === id);
+  const override = useOfficeEditStore((s) => s.overrides[id]);
+
+  // Issue 246 review I1: start the drag from the DISPLAYED position
+  // (base + behaviour offset), not the seat anchor.
+  const { onPointerDown, isDragging } = useEditDrag(
+    id,
+    override?.x ?? baseX,
+    override?.y ?? baseY,
+    () => {
+      const off = getOffset(id);
+      return {
+        x: override?.x ?? baseX + off.x,
+        y: override?.y ?? baseY + off.y,
+      };
+    },
+  );
+
   useTick(() => {
     const off = getOffset(id);
     const node = ref.current;
-    if (node) {
+    if (!node) return;
+    if (override?.x !== undefined && override?.y !== undefined) {
+      // Issue 246: the operator moved this avatar in edit mode - the override
+      // wins over the behaviour engine's computed seat/walk position. Keep the
+      // idle depth boost the zIndex prop carries (review I1 follow-up).
+      node.x = override.x;
+      node.y = override.y;
+      if (zIndex !== undefined) {
+        node.zIndex = override.y + (zIndex - baseY);
+      }
+    } else {
       node.x = baseX + off.x;
       node.y = baseY + off.y;
       // Issue 226 R4 (Sol): depth must follow the DISPLAYED world Y while an
@@ -568,10 +615,73 @@ function BehaviorGroup({
       if (zIndex !== undefined) node.zIndex = zIndex + off.y;
     }
   });
+
+  // Issue 246: rotate the avatar about its visual centre. Cast sprites are
+  // anchored bottom-centre at the feet (CAST_SPRITE_HEIGHT = 133), so the
+  // visual centre sits at y = -66.5 and the inner content shifts back down.
+  const AGENT_SPRITE_HEIGHT = 133;
+  const rotRad = ((override?.rotation ?? 0) * Math.PI) / 180;
+
   return (
-    <pixiContainer ref={ref} x={baseX} y={baseY} zIndex={zIndex}>
-      {children}
+    <pixiContainer
+      ref={ref}
+      x={baseX}
+      y={baseY}
+      zIndex={zIndex}
+      eventMode={isEditMode && editChrome ? "static" : "auto"}
+      cursor={
+        isEditMode && editChrome ? (isDragging ? "grabbing" : "grab") : "default"
+      }
+      onPointerDown={isEditMode && editChrome ? onPointerDown : undefined}
+    >
+      {editChrome ? (
+        <pixiContainer x={0} y={-AGENT_SPRITE_HEIGHT / 2} rotation={rotRad}>
+          <pixiContainer x={0} y={AGENT_SPRITE_HEIGHT / 2}>
+            {children}
+          </pixiContainer>
+        </pixiContainer>
+      ) : (
+        children
+      )}
+      {/* Issue 246: selection affordance for the avatar (axis-aligned box). */}
+      {editChrome && isSelected && (
+        <pixiGraphics
+          draw={(g) => {
+            g.clear();
+            g.roundRect(-44, -AGENT_SPRITE_HEIGHT - 10, 88, AGENT_SPRITE_HEIGHT + 20, 4);
+            g.stroke({ width: 2, color: 0x38bdf8, alpha: 0.95 });
+          }}
+        />
+      )}
     </pixiContainer>
+  );
+}
+
+/**
+ * Issue 246: a user-inserted sprite from the palette (persisted in the edit
+ * store). Renders through EditableSprite so it is selectable, draggable and
+ * rotatable like every other office sprite.
+ */
+function InsertedSpriteView({ entity }: { entity: InsertedSprite }): ReactNode {
+  const texture = usePixiTexture(entity.spritePath);
+  if (!texture) return null;
+  // Issue 246 review I4: prefer the catalog's display height for the sprite;
+  // the raw texture height over/under-sizes assets.
+  const item = spriteCatalogItemByPath(entity.spritePath);
+  const target = item?.defaultHeight ?? Math.min(texture.height, 180);
+  const height = Math.max(24, Math.min(target, 220));
+  const width = (texture.width / texture.height) * height;
+  return (
+    <EditableSprite
+      id={entity.id}
+      name={entity.name}
+      defaultX={entity.x}
+      defaultY={entity.y}
+      defaultRotation={entity.rotation}
+      width={width}
+      height={height}
+      texture={texture}
+    />
   );
 }
 
@@ -676,6 +786,53 @@ export function OfficeGame(): ReactNode {
     }
     return buildingConfig?.floors.find((f) => f.id === floorId) ?? null;
   }, [floorId, buildingConfig]);
+
+  // Issue 246: office edit mode state (insert palette -> persisted sprites).
+  const insertedEntities = useOfficeEditStore((s) => s.insertedEntities);
+  const insertEntity = useOfficeEditStore((s) => s.insertEntity);
+  const isEditMode = useOfficeEditStore((s) => s.isEditMode);
+
+  // Issue 246: accept palette drags dropped on the office canvas.
+  // Review I3: only while unlocked, and only /sprites/ paths.
+  const handleEditDragOver = useCallback(
+    (e: DragEvent<HTMLDivElement>) => {
+      if (!isEditMode) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "copy";
+    },
+    [isEditMode],
+  );
+
+  const handleEditDrop = useCallback(
+    (e: DragEvent<HTMLDivElement>) => {
+      if (!isEditMode) return;
+      e.preventDefault();
+      let payload: { spritePath?: string; name?: string } = {};
+      try {
+        payload = JSON.parse(e.dataTransfer.getData("application/json") || "{}");
+      } catch {
+        payload = {};
+      }
+      const spritePath =
+        payload.spritePath || e.dataTransfer.getData("text/plain");
+      if (!spritePath || !spritePath.startsWith("/sprites/")) return;
+      const canvas = document.querySelector(
+        ".pixi-canvas-container canvas",
+      ) as HTMLCanvasElement | null;
+      if (!canvas) return;
+      const rect = canvas.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) return;
+      const x = Math.round(((e.clientX - rect.left) / rect.width) * CANVAS_WIDTH);
+      const y = Math.round(((e.clientY - rect.top) / rect.height) * CANVAS_HEIGHT);
+      insertEntity(
+        spritePath,
+        Math.max(20, Math.min(CANVAS_WIDTH - 20, x)),
+        Math.max(20, Math.min(CANVAS_HEIGHT - 20, y)),
+        payload.name,
+      );
+    },
+    [insertEntity, isEditMode],
+  );
 
   // Compaction animation state
   const compactionAnimation = useCompactionAnimation();
@@ -873,6 +1030,7 @@ export function OfficeGame(): ReactNode {
         wheel={{ step: 0.1 }}
         pinch={{ step: 5 }}
         doubleClick={{ mode: "reset" }}
+        panning={{ disabled: isEditMode }}
         onTransform={(ref, state) => {
           // Auto-reset pan offset when zooming back out to 1:1
           if (
@@ -884,11 +1042,18 @@ export function OfficeGame(): ReactNode {
         }}
       >
         <ZoomControls />
+        {/* Issue 246: edit-mode HUD (toolbar + insert palette). */}
+        <EditToolbar />
+        <SpritePalette />
         <TransformComponent
           wrapperClass="w-full h-full"
           contentClass="w-full h-full"
         >
-          <div className="pixi-canvas-container w-full h-full relative">
+          <div
+            className="pixi-canvas-container w-full h-full relative"
+            onDragOver={handleEditDragOver}
+            onDrop={handleEditDrop}
+          >
             <Application
               key={`pixi-app-${hmrVersion}`}
               width={CANVAS_WIDTH}
@@ -1052,6 +1217,11 @@ export function OfficeGame(): ReactNode {
                             they drew over their own occupants). */}
                         <SolDesks present={presentPinned} />
                         {presentPinned.has("Sol Docker") && <BossDesk />}
+                        {/* Issue 246: operator-inserted sprites (persisted),
+                            z-sorted with the rest of the floor. */}
+                        {insertedEntities.map((entity) => (
+                          <InsertedSpriteView key={entity.id} entity={entity} />
+                        ))}
                       </>
                     )}
                     {/* Desk chairs (legacy theme; the DM art has its own desks) */}
@@ -1091,6 +1261,7 @@ export function OfficeGame(): ReactNode {
                             agentDisplayPosition(agent).y +
                             (agent.phase === "idle" ? 60 : 0)
                           }
+                          editChrome
                         >
                           <AgentSprite
                             id={agent.id}

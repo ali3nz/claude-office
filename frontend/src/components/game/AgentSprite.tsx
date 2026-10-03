@@ -38,6 +38,7 @@ import {
   type OfficeFacing,
 } from "@/themes/w17ant-cast";
 import { getOffset } from "@/systems/officeBehavior";
+import { useOfficeEditStore } from "@/stores/officeEditStore";
 
 // ============================================================================
 // TYPES
@@ -234,6 +235,9 @@ function AgentSpriteComponent({
 }: AgentSpriteProps): ReactNode {
   const clickToFocusEnabled = usePreferencesStore((s) => s.clickToFocusEnabled);
   const openFocusPopup = useAttentionStore((s) => s.openFocusPopup);
+  // Issue 246: while the office is unlocked for editing, clicks select/drag
+  // sprites instead of opening the focus popup.
+  const isEditMode = useOfficeEditStore((s) => s.isEditMode);
 
   // ---- W17ant cast selection -------------------------------------------
   // Operator (issue 226 R5): Sol Docker is the BOSS - pin the Mike Scott
@@ -376,7 +380,7 @@ function AgentSpriteComponent({
 
   // Click handler for focus popup
   const handlePointerTap = useCallback(() => {
-    if (!clickToFocusEnabled) return;
+    if (!clickToFocusEnabled || isEditMode) return;
     const canvas = document.querySelector(".pixi-canvas-container canvas");
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
@@ -384,7 +388,7 @@ function AgentSpriteComponent({
     const screenX = rect.left + wp.x * scale;
     const screenY = rect.top + wp.y * scale;
     openFocusPopup(id, screenX, screenY);
-  }, [clickToFocusEnabled, id, wp.x, wp.y, openFocusPopup]);
+  }, [clickToFocusEnabled, isEditMode, id, wp.x, wp.y, openFocusPopup]);
 
   // Bubble offset for capsule rendering
   const bubbleOffset = -93;

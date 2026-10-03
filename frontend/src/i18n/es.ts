@@ -291,6 +291,11 @@ const es: Record<TranslationKey, string> = {
   "settings.filterError": "Errores y paradas",
   "settings.filterTaskComplete": "Tareas completadas",
   "settings.filterArrival": "Llegadas de agentes",
+  "settings.officeLayout": "Diseño de la oficina",
+  "settings.unlockEditing": "Desbloquear edición",
+  "settings.roomArea": "Sala / Área",
+  "settings.areaSingle": "Vista única",
+  "settings.areaLobby": "Vestíbulo",
 };
 
 export default es;

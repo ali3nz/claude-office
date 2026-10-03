@@ -8,9 +8,16 @@ import {
   type ClockFormat,
 } from "@/stores/preferencesStore";
 import { useOfficeRoomStore } from "@/stores/officeRoomStore";
+import { useOfficeEditStore } from "@/stores/officeEditStore";
+import { useNavigationStore } from "@/stores/navigationStore";
+import { LOBBY_FLOOR_ID } from "@/types/navigation";
 import { useTranslation } from "@/hooks/useTranslation";
 import { locales, type Locale } from "@/i18n";
 import { BuildingTab } from "@/components/settings/BuildingTab";
+
+// Issue 246: room/area selection persistence (Settings -> Office Layout).
+const AREA_STORAGE_KEY = "claude-office-floor";
+const AREA_SINGLE = "__single__";
 
 // ============================================================================
 // TYPES
@@ -99,6 +106,27 @@ export default function SettingsModal({
   );
   const officeRoom = useOfficeRoomStore((s) => s.room);
   const setOfficeRoom = useOfficeRoomStore((s) => s.setRoom);
+  const isEditMode = useOfficeEditStore((s) => s.isEditMode);
+  const setEditMode = useOfficeEditStore((s) => s.setEditMode);
+  // Issue 246: floor/area switching (room selection) from Settings.
+  const navView = useNavigationStore((s) => s.view);
+  const navFloorId = useNavigationStore((s) => s.floorId);
+  const buildingConfig = useNavigationStore((s) => s.buildingConfig);
+  const goToFloor = useNavigationStore((s) => s.goToFloor);
+  const goToSingle = useNavigationStore((s) => s.goToSingle);
+
+  const selectArea = (areaId: string): void => {
+    try {
+      window.localStorage.setItem(AREA_STORAGE_KEY, areaId);
+    } catch {
+      // ignore storage failures (private mode)
+    }
+    if (areaId === AREA_SINGLE) {
+      goToSingle();
+    } else {
+      goToFloor(areaId);
+    }
+  };
 
   // Attention settings
   const commandBarEnabled = usePreferencesStore((s) => s.commandBarEnabled);
@@ -474,6 +502,76 @@ export default function SettingsModal({
                 checked={toastFilterArrival}
                 onChange={() => setToastFilterArrival(!toastFilterArrival)}
               />
+            </div>
+          </div>
+
+          {/* Office Layout Editing (Issue 246) */}
+          <div className="pt-4 border-t border-slate-800">
+            <label className="block text-slate-400 text-xs font-bold uppercase tracking-wider mb-3">
+              {t("settings.officeLayout")}
+            </label>
+            <SettingsToggle
+              label={t("settings.unlockEditing")}
+              checked={isEditMode}
+              onChange={() => setEditMode(!isEditMode)}
+            />
+
+            {/* Issue 246: change the room to a different floor / area. */}
+            <div className="mt-4">
+              <label className="block text-slate-400 text-xs font-bold uppercase tracking-wider mb-3">
+                {t("settings.roomArea")}
+              </label>
+              <div
+                className="flex flex-wrap gap-2"
+                role="radiogroup"
+                aria-label={t("settings.roomArea")}
+              >
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={navView === "single"}
+                  onClick={() => selectArea(AREA_SINGLE)}
+                  className={`px-3 py-2 rounded-lg border text-xs font-bold transition-colors ${
+                    navView === "single"
+                      ? "bg-purple-500/20 border-purple-500 text-purple-300"
+                      : "bg-slate-800 border-slate-700 text-slate-400 hover:border-slate-600"
+                  }`}
+                >
+                  {t("settings.areaSingle")}
+                </button>
+                {(buildingConfig?.floors ?? []).map((f) => (
+                  <button
+                    key={f.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={navView === "floor" && navFloorId === f.id}
+                    onClick={() => selectArea(f.id)}
+                    className={`px-3 py-2 rounded-lg border text-xs font-bold transition-colors ${
+                      navView === "floor" && navFloorId === f.id
+                        ? "bg-purple-500/20 border-purple-500 text-purple-300"
+                        : "bg-slate-800 border-slate-700 text-slate-400 hover:border-slate-600"
+                    }`}
+                  >
+                    <span className="mr-1">{f.icon}</span>
+                    {f.name}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={
+                    navView === "floor" && navFloorId === LOBBY_FLOOR_ID
+                  }
+                  onClick={() => selectArea(LOBBY_FLOOR_ID)}
+                  className={`px-3 py-2 rounded-lg border text-xs font-bold transition-colors ${
+                    navView === "floor" && navFloorId === LOBBY_FLOOR_ID
+                      ? "bg-purple-500/20 border-purple-500 text-purple-300"
+                      : "bg-slate-800 border-slate-700 text-slate-400 hover:border-slate-600"
+                  }`}
+                >
+                  {t("settings.areaLobby")}
+                </button>
+              </div>
             </div>
           </div>
 

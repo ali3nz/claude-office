@@ -99,11 +99,23 @@ body {
   }
 
   .pixi-canvas-container canvas {
-    width: 100% !important;
-    height: 100% !important;
-    object-fit: contain;
-    /* Centered so the letterbox is balanced (operator: "black on the right"). */
-    object-position: top center;
+    /* Issue 246: size the canvas ELEMENT to its own aspect-preserved box.
+       The previous width/height:100% + object-fit: contain kept the visuals
+       but letterboxed the bitmap INSIDE a taller element box, so Pixi's
+       pointer mapping (which divides by the element rect) disagreed with the
+       rendering: clicks selected sprites offset from where they were drawn
+       and drags drifted vertically by the letterbox factor. max-width/
+       max-height preserve the aspect (no cropping) with an element rect that
+       equals the rendered content box, so events and rendering agree.
+       Still top-anchored (no flex centering) as per issue 226 R5. */
+    width: auto !important;
+    height: auto !important;
+    max-width: 100%;
+    max-height: 100%;
+    /* Issue 246 review I2: keep the old horizontal centring (object-position:
+       top center) - a wide pane would otherwise leave all slack on the right. */
+    display: block;
+    margin-inline: auto;
   }
 
   /* Custom Scrollbar Theme */

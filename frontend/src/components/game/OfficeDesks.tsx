@@ -14,6 +14,7 @@
 import { type ReactNode } from "react";
 import { usePixiTexture } from "@/hooks/usePixiTexture";
 import { artToCanvas } from "@/themes/w17ant-spots";
+import { EditableSprite } from "./edit/EditableSprite";
 import {
   DESKS,
   DESK_SPOTS,
@@ -26,24 +27,38 @@ import {
 } from "@/themes/w17ant-spots";
 
 function DeskSprite({
+  id,
+  name,
   desk,
   boss = false,
   zBias = -220,
 }: {
+  id?: string;
+  name?: string;
   desk: DeskFurniture;
   boss?: boolean;
-  /**
-   * Issue 226 R5 (operator): desks are FURNITURE - they always sort below the
-   * characters (a desk sprite is ~181px tall, so a -220 bias still lets an
-   * agent standing well behind a desk sort behind it, while the occupant is
-   * never covered by its own desk).
-   */
   zBias?: number;
 }): ReactNode {
   const texture = usePixiTexture(deskSpritePath(desk.kind));
   if (!texture) return null;
   const height = deskSpriteHeight(desk.kind);
   const width = (texture.width / texture.height) * height;
+
+  if (id) {
+    return (
+      <EditableSprite
+        id={id}
+        name={name ?? (boss ? "Boss Desk" : "Workstation Desk")}
+        defaultX={desk.position.x}
+        defaultY={desk.position.y}
+        width={width}
+        height={height}
+        zBias={zBias + (boss ? 0.5 : 0)}
+        texture={texture}
+      />
+    );
+  }
+
   return (
     <pixiSprite
       texture={texture}
@@ -83,6 +98,8 @@ export function DeskCluster({
         return (
           <DeskSprite
             key={`desk-${i}`}
+            id={`desk-${i + 1}`}
+            name={`Workstation Desk ${i + 1}`}
             desk={{ kind: paired.kind, position: seat.position }}
           />
         );
@@ -117,10 +134,14 @@ const ART_PER_ROOM = 1.5;
 const ROOM_SCALE = 1024 / 896;
 
 function DecorSprite({
+  id,
+  name,
   path,
   art,
   h,
 }: {
+  id?: string;
+  name?: string;
   path: string;
   art: [number, number];
   h: number;
@@ -130,6 +151,22 @@ function DecorSprite({
   const pos = artToCanvas((art[0] / 100) * 1200, (art[1] / 100) * 896);
   const height = h * ART_PER_ROOM * ROOM_SCALE;
   const width = (texture.width / texture.height) * height;
+
+  if (id) {
+    return (
+      <EditableSprite
+        id={id}
+        name={name}
+        defaultX={pos.x}
+        defaultY={pos.y}
+        width={width}
+        height={height}
+        zBias={-400}
+        texture={texture}
+      />
+    );
+  }
+
   return (
     <pixiSprite
       texture={texture}
@@ -213,11 +250,42 @@ export function OfficeDecor(): ReactNode {
       <Lounge />
       {/* Sol: pair the lounge with real assets - plants just outside the rug
           and a cat ON the rug beside the table. */}
-      <DecorSprite path="/sprites/decoration/monstera-plant.png" art={[46.9, 45.2]} h={71} />
-      <DecorSprite path="/sprites/decoration/snake-plant.png" art={[69.3, 48.3]} h={63} />
-      <DecorSprite path="/sprites/cats/cat-bandit.png" art={[59.0, 52.0]} h={34} />
+      <DecorSprite
+        id="decor-monstera-main"
+        name="Monstera Plant"
+        path="/sprites/decoration/monstera-plant.png"
+        art={[46.9, 45.2]}
+        h={71}
+      />
+      <DecorSprite
+        id="decor-snake-main"
+        name="Snake Plant"
+        path="/sprites/decoration/snake-plant.png"
+        art={[69.3, 48.3]}
+        h={63}
+      />
+      <DecorSprite
+        id="decor-cat-bandit-main"
+        name="Cat Bandit"
+        path="/sprites/cats/cat-bandit.png"
+        art={[59.0, 52.0]}
+        h={34}
+      />
       {DECOR.map((d, i) => (
-        <DecorSprite key={`decor-${i}`} path={d.path} art={d.art} h={d.h} />
+        <DecorSprite
+          key={`decor-${i}`}
+          id={`decor-${i}`}
+          name={
+            d.path
+              .split("/")
+              .pop()
+              ?.replace(".png", "")
+              ?.replace(/[-_]/g, " ") ?? `Decor ${i + 1}`
+          }
+          path={d.path}
+          art={d.art}
+          h={d.h}
+        />
       ))}
     </>
   );
@@ -236,7 +304,12 @@ export function SolDesks({ present }: { present: Set<string> }): ReactNode {
     <>
       {PINNED_DESKS.map((desk, i) =>
         present.has(PINNED_DESK_OWNERS[i]) ? (
-          <DeskSprite key={`pinned-desk-${i}`} desk={desk} />
+          <DeskSprite
+            key={`pinned-desk-${i}`}
+            id={`desk-${PINNED_DESK_OWNERS[i].toLowerCase().replace(/\s+/g, "-")}`}
+            name={`${PINNED_DESK_OWNERS[i]}'s Desk`}
+            desk={desk}
+          />
         ) : null,
       )}
     </>
@@ -245,5 +318,5 @@ export function SolDesks({ present }: { present: Set<string> }): ReactNode {
 
 /** Michael's workstation (additional desk, drawn behind the boss sprite). */
 export function BossDesk(): ReactNode {
-  return <DeskSprite desk={BOSS_DESK} boss />;
+  return <DeskSprite id="boss-desk" name="Boss Desk" desk={BOSS_DESK} boss />;
 }

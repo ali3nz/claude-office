@@ -291,6 +291,11 @@ const ptBR: Record<TranslationKey, string> = {
   "settings.filterError": "Erros e paradas",
   "settings.filterTaskComplete": "Tarefas concluídas",
   "settings.filterArrival": "Chegadas de agentes",
+  "settings.officeLayout": "Layout do escritório",
+  "settings.unlockEditing": "Desbloquear edição",
+  "settings.roomArea": "Sala / Área",
+  "settings.areaSingle": "Visão única",
+  "settings.areaLobby": "Saguão",
 };
 
 export default ptBR;
