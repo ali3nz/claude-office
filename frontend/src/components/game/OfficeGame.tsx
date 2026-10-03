@@ -58,6 +58,7 @@ import { useCompactionAnimation } from "@/systems/compactionAnimation";
 import { useOfficeTextures } from "@/hooks/useOfficeTextures";
 import {
   getSpotForDesk,
+  SEAT_FACINGS,
   COFFEE_SPOT,
   WATER_SPOT,
   PINNED_SEATS,
@@ -410,7 +411,10 @@ function seatFacingFor(agent: {
   if (agent.name === "GhostReporting") return "front-right";
   if (agent.name === "TruFreedom") return "front-left";
   const deskNum = deskAssignmentCache.get(agent.id) ?? agent.desk;
-  if (deskNum) return getSpotForDesk(deskNum).facing;
+  if (deskNum) {
+    // Issue 226 R6c: always face the workstation the character stands at.
+    return SEAT_FACINGS[(deskNum - 1) % SEAT_FACINGS.length];
+  }
   return undefined;
 }
 
@@ -994,7 +998,11 @@ export function OfficeGame(): ReactNode {
                             sunglassesTexture={textures.sunglasses}
                             renderBubble={false}
                             renderLabel={false}
-                            isTyping={agent.isTyping}
+                            isTyping={
+                              agent.isTyping ||
+                              agent.name === "Sol Docker" ||
+                              agent.name === "Sol Webserver"
+                            }
                             seatFacing={seatFacingFor(agent)}
                           />
                         </BehaviorGroup>
@@ -1118,6 +1126,10 @@ export function OfficeGame(): ReactNode {
                           glyph={agentStateGlyph(agent)}
                           task={agent.currentTask}
                           state={agent.backendState}
+                          alwaysBusy={
+                            agent.name === "Sol Docker" ||
+                            agent.name === "Sol Webserver"
+                          }
                           isTyping={agent.isTyping}
                           idleMs={idleTick - (agent.lastActivityAt ?? idleTick)}
                           away={

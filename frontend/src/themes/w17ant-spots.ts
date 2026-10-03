@@ -157,6 +157,17 @@ export const SEAT_TO_DESK_INDEX: readonly number[] = [
   5, 4, 3, 2, 1, 0, 8, 7, 6, 9,
 ];
 
+/**
+ * Isometric facing helper (issue 226 R6c): front-* looks toward the camera
+ * (down-screen), rear-* looks into the scene (up-screen); the suffix is the
+ * horizontal component. A character faces its monitor iff the facing matches
+ * the sign of (desk - seat).
+ */
+function facingToward(dx: number, dy: number): OfficeFacing {
+  if (dy < 0) return dx >= 0 ? "rear-right" : "rear-left";
+  return dx >= 0 ? "front-right" : "front-left";
+}
+
 export const DESKS: DeskFurniture[] = (
   [
     { k: "left-rear", p: [42.4, 50.4] },
@@ -174,6 +185,25 @@ export const DESKS: DeskFurniture[] = (
   kind: k,
   position: artToCanvas((p[0] / 100) * ART_WIDTH, (p[1] / 100) * ART_HEIGHT),
 }));
+
+/** DESKS re-ordered so entry i is the workstation of seat i+1. */
+const DESKS_SEAT_ORDER = SEAT_TO_DESK_INDEX.map((idx) => DESKS[idx]);
+
+/**
+ * Facing that points from each of the 10 seats AT its own workstation
+ * (issue 226 R6c, operator: "avatars are still facing the wall").
+ */
+export const SEAT_FACINGS: readonly OfficeFacing[] = Array.from(
+  { length: DESK_SPOTS.length },
+  (_, i) => {
+    const seat = DESK_SPOTS[i];
+    const desk = DESKS_SEAT_ORDER[i];
+    return facingToward(
+      desk.position.x - seat.position.x,
+      desk.position.y - seat.position.y,
+    );
+  },
+);
 
 /**
  * Boss workstation: one additional desk (not part of W17ant's main-office

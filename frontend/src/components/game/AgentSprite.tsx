@@ -345,11 +345,10 @@ function AgentSpriteComponent({
       let jx = 0;
       let jy = 0;
       if (typingRef.current) {
-        // Issue 226 R6 (operator: "I want to see typing"): a readable typing
-        // motion - a quick vertical key-tap with a small horizontal shift,
-        // roughly 3.5 taps/second, clearly visible but not a vibration.
-        jx = Math.sin(t * 22) * 0.5;
-        jy = Math.sin(t * 22 + 0.6) * 1.6;
+        // Issue 226 R6c (operator: "I don't see any typing"): a much more
+        // visible key-tap - ~3 taps/second at 3px vertical + a small lean.
+        jx = Math.sin(t * 19) * 0.8;
+        jy = Math.sin(t * 19 + 0.6) * 3.0;
       }
       node.x = jx;
       node.y = breathe + jy;
@@ -549,6 +548,11 @@ export interface AgentLabelProps {
   idleMs?: number;
   /** true while the agent is away from its seat (break/consult -> coffee). */
   away?: boolean;
+  /**
+   * Issue 226 R6c (operator): the two Sol consultants always look busy -
+   * permanent typing animation, no status text above them.
+   */
+  alwaysBusy?: boolean;
 }
 
 function AgentLabelComponent({
@@ -560,6 +564,7 @@ function AgentLabelComponent({
   isTyping = false,
   idleMs = 0,
   away = false,
+  alwaysBusy = false,
 }: AgentLabelProps): ReactNode {
   coMark("label");
   // Issue 226 R6 (operator): effect props from the upstream (MIT) effect set.
@@ -567,8 +572,9 @@ function AgentLabelComponent({
   const sleepingTex = usePixiTexture("/sprites/effects/sleeping.png");
   const coffeeTex = usePixiTexture("/sprites/effects/need-coffee.png");
 
-  const needsPermission = state === "waiting_permission";
-  const sleeping = !isTyping && !away && idleMs > 3 * 60 * 1000;
+  const needsPermission = !alwaysBusy && state === "waiting_permission";
+  const sleeping = !alwaysBusy && !isTyping && !away && idleMs > 3 * 60 * 1000;
+  const showTyping = isTyping || alwaysBusy;
 
   // Pulsing permission badge - driven straight on the node (no re-render).
   const alertRef = useRef<Container | null>(null);
@@ -598,7 +604,7 @@ function AgentLabelComponent({
         }}
         resolution={2}
       />
-      {glyph ? (
+      {glyph && !alwaysBusy ? (
         <pixiText
           text={glyph}
           anchor={0.5}
@@ -610,7 +616,7 @@ function AgentLabelComponent({
 
       {/* Task chip - DARK MODE: muted text on a dark panel, never bright white
           on the room art (operator 2026-10-03). */}
-      {taskText ? (
+      {taskText && !alwaysBusy ? (
         <pixiContainer y={-40}>
           <pixiGraphics
             draw={(g) => {
@@ -661,8 +667,9 @@ function AgentLabelComponent({
 
       {/* Typing keyboard at the hands while tool-active. Local y 118 == seat
           y -34 (the container sits 152px above the feet). */}
-      {isTyping && typingTex ? (
-        <pixiSprite texture={typingTex} anchor={0.5} x={30} y={118} scale={0.5} />
+      {/* Issue 226 R6c: big enough to actually read as typing. */}
+      {showTyping && typingTex ? (
+        <pixiSprite texture={typingTex} anchor={0.5} x={34} y={112} scale={0.85} />
       ) : null}
 
       {/* Coffee while away on a break / consult walk. */}

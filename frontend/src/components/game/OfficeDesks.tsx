@@ -91,6 +91,13 @@ const DECOR: { path: string; art: [number, number]; h: number }[] = [
   { path: "/sprites/decoration/snake-plant.png", art: [32.0, 71.2], h: 63 },
   { path: "/sprites/decoration/money-tree.png", art: [60.2, 80.4], h: 63 },
   { path: "/sprites/decoration/printer.png", art: [85.4, 56.8], h: 69 },
+  // Issue 226 R6c: floor reads too empty - more dressing + two office cats.
+  { path: "/sprites/decoration/monstera-plant.png", art: [17.5, 62.0], h: 71 },
+  { path: "/sprites/decoration/snake-plant.png", art: [70.0, 60.0], h: 63 },
+  { path: "/sprites/decoration/money-tree.png", art: [40.0, 47.0], h: 63 },
+  { path: "/sprites/furniture/filling-closed.png", art: [24.5, 52.0], h: 56 },
+  { path: "/sprites/cats/cat-bandit.png", art: [48.0, 62.0], h: 34 },
+  { path: "/sprites/cats/cat-sprinkles.png", art: [33.0, 78.0], h: 34 },
 ];
 
 const ART_PER_ROOM = 1.5;
