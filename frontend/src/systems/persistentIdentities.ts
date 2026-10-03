@@ -27,6 +27,15 @@ export const PERSISTENT_SEEDS: readonly { name: string; id: string }[] = [
 const SEED_NAMES = new Set(PERSISTENT_SEEDS.map((s) => s.name));
 
 /**
+ * The four persistent identities by ID - SOL turn-1 review: an `ai-*` prefix
+ * exemption was WIDER than the requirement (it would make any future
+ * `ai-something` agent immortal). Exemptions enumerate these exact IDs.
+ */
+export const PERSISTENT_IDS: ReadonlySet<string> = new Set(
+  PERSISTENT_SEEDS.map((s) => s.id),
+);
+
+/**
  * Stand-in list for identities the live feed is currently missing. Updates the
  * cache from the live input first. Disjoint from `real` by construction, so a
  * live identity can never be duplicated.

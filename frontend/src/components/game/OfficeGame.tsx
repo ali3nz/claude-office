@@ -66,7 +66,10 @@ import {
 } from "@/themes/w17ant-spots";
 import { setBehavior, tickBehaviors, getOffset } from "@/systems/officeBehavior";
 import type { AgentAnimationState } from "@/stores/slices/types";
-import { withPersistentIdentities } from "@/systems/persistentIdentities";
+import {
+  withPersistentIdentities,
+  PERSISTENT_IDS,
+} from "@/systems/persistentIdentities";
 import { coMark } from "@/utils/coMark";
 import {
   CANVAS_WIDTH,
@@ -387,8 +390,9 @@ function isRecentlyActive(
   // Issue 226 R6h: robust persistent-identity detection - the ai-agents and
   // the two gateway sessions never leave the floor even when their feed goes
   // quiet (TruFreedom went missing because only the display name was checked).
-  const id = agent.id ?? "";
-  if (id.startsWith("ai-") || id.includes("agentchat-sol")) return true;
+  // SOL review: enumerate the four persistent IDs exactly; an `ai-` prefix
+  // would make any future ai-* agent permanently immune to the idle sweep.
+  if (PERSISTENT_IDS.has(agent.id ?? "")) return true;
   if (!agent.lastActivityAt) return true;
   return now - agent.lastActivityAt < IDLE_TIMEOUT_MS;
 }
