@@ -149,37 +149,52 @@ function DecorSprite({
  * palette) and the biggest upstream props are added around it.
  */
 function Lounge(): ReactNode {
+  // Scaled against known references: a character is 133 canvas px tall, a desk
+  // ~180 px. Sofa 176 wide x 62 tall, rug 250x140, table 70x34.
   return (
     <>
+      {/* rug */}
       <pixiGraphics
         draw={(g) => {
           g.clear();
-          g.roundRect(430, 690, 330, 190, 40);
+          g.roundRect(505, 560, 250, 140, 28);
           g.fill({ color: 0x1b2433, alpha: 0.95 });
-          g.roundRect(444, 703, 302, 164, 34);
+          g.roundRect(514, 568, 232, 124, 24);
           g.fill({ color: 0x223047, alpha: 0.95 });
         }}
       />
+      {/* sofa */}
       <pixiGraphics
         draw={(g) => {
           g.clear();
-          g.roundRect(470, 620, 250, 46, 12);
+          g.roundRect(548, 505, 164, 30, 10);
           g.fill(0x2f3d55);
-          g.roundRect(462, 652, 266, 44, 10);
+          g.roundRect(542, 530, 176, 30, 9);
           g.fill(0x3b4b68);
-          g.roundRect(452, 624, 22, 74, 8);
+          g.roundRect(530, 508, 16, 52, 6);
           g.fill(0x2a3750);
-          g.roundRect(716, 624, 22, 74, 8);
+          g.roundRect(714, 508, 16, 52, 6);
           g.fill(0x2a3750);
         }}
       />
+      {/* coffee table */}
       <pixiGraphics
         draw={(g) => {
           g.clear();
-          g.roundRect(548, 726, 130, 62, 10);
+          g.roundRect(595, 612, 70, 34, 7);
           g.fill(0x4a3524);
-          g.roundRect(556, 733, 114, 48, 8);
+          g.roundRect(600, 617, 60, 24, 5);
           g.fill(0x5c422c);
+        }}
+      />
+      {/* floor lamp */}
+      <pixiGraphics
+        draw={(g) => {
+          g.clear();
+          g.rect(734, 470, 4, 96);
+          g.fill(0x33405a);
+          g.roundRect(716, 452, 40, 22, 8);
+          g.fill({ color: 0xf3e3b3, alpha: 0.9 });
         }}
       />
     </>
@@ -190,6 +205,7 @@ function Lounge(): ReactNode {
 export function OfficeDecor(): ReactNode {
   return (
     <>
+      <Lounge />
       {DECOR.map((d, i) => (
         <DecorSprite key={`decor-${i}`} path={d.path} art={d.art} h={d.h} />
       ))}
