@@ -407,10 +407,12 @@ function seatFacingFor(agent: {
   name: string | null;
   desk?: number | null;
 }): OfficeFacing | undefined {
-  if (agent.name === "Sol Docker") return "front-right";
-  if (agent.name === "Sol Webserver") return "front-left";
-  if (agent.name === "GhostReporting") return "front-right";
-  if (agent.name === "TruFreedom") return "front-left";
+  // Issue 226 R6f: the consultants face their desks too (rear sprites) - the
+  // old hardcoded front facings were overriding the desk-facing rule.
+  if (agent.name === "Sol Docker") return "rear-right";
+  if (agent.name === "Sol Webserver") return "rear-left";
+  if (agent.name === "GhostReporting") return "rear-right";
+  if (agent.name === "TruFreedom") return "rear-left";
   const deskNum = deskAssignmentCache.get(agent.id) ?? agent.desk;
   if (deskNum) {
     // Issue 226 R6f: the desk now renders AT the seat (see DeskCluster), so

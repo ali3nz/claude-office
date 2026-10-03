@@ -16,6 +16,7 @@ import { usePixiTexture } from "@/hooks/usePixiTexture";
 import { artToCanvas } from "@/themes/w17ant-spots";
 import {
   DESKS,
+  DESK_SPOTS,
   BOSS_DESK,
   PINNED_DESKS,
   SEAT_TO_DESK_INDEX,
@@ -75,13 +76,14 @@ export function DeskCluster({
         // Issue 226 R6f (operator, twice): the authored furniture positions do
         // NOT line up with the seat positions (they are separate orderings),
         // which is why characters appeared to face away from their desks.
-        // Draw the workstation AT the seat instead - then "at the desk" and
+        // Draw the workstation AT THE SEAT instead - then "at the desk" and
         // "facing the monitor" are true by construction.
         const paired = DESKS[SEAT_TO_DESK_INDEX[i]] ?? desk;
+        const seat = DESK_SPOTS[i];
         return (
           <DeskSprite
             key={`desk-${i}`}
-            desk={{ kind: paired.kind, position: desk.position }}
+            desk={{ kind: paired.kind, position: seat.position }}
           />
         );
       })}
