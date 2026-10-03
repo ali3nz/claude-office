@@ -84,16 +84,21 @@ export function readLocalLayout(): SharedLayout | null {
   const overrides = readInitialOverrides();
   const inserted = readInitialInserted();
   const at = readLayoutUpdatedAt();
-  // A timestamp alone still counts: it means "cleared by the operator", which
-  // must propagate (Reset clears every screen).
-  if (Object.keys(overrides).length === 0 && inserted.length === 0 && at === 0) {
-    return null;
-  }
   let area: string | undefined;
   try {
     area = window.localStorage.getItem(STORAGE_KEY_AREA) ?? undefined;
   } catch {
     area = undefined;
+  }
+  // Content, a timestamp (a Reset), or an area choice all count as "something
+  // to share" - the embed must show the same room, not just the same sprites.
+  if (
+    Object.keys(overrides).length === 0 &&
+    inserted.length === 0 &&
+    at === 0 &&
+    !area
+  ) {
+    return null;
   }
   return {
     version: 1,
