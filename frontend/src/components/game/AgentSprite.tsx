@@ -30,6 +30,7 @@ import { drawBubble, drawIconBadge } from "./shared/drawBubble";
 import { drawRightArm, drawLeftArm } from "./shared/drawArm";
 import { truncateBubbleText } from "@/utils/bubbleText";
 import { useCastTexture } from "@/hooks/useCastTexture";
+import { usePixiTexture } from "@/hooks/usePixiTexture";
 import { coMark } from "@/utils/coMark";
 import {
   getCastForAgent,
@@ -540,14 +541,47 @@ export interface AgentLabelProps {
   position: Position;
   /** Issue 226 R4 (Sol): compact state/activity glyph above the name. */
   glyph?: string | null;
+  /** Issue 226 R6 (operator): desk info + props. */
+  task?: string | null;
+  state?: string;
+  isTyping?: boolean;
+  /** ms since the agent's last real activity (idle -> sleeping Zzz). */
+  idleMs?: number;
+  /** true while the agent is away from its seat (break/consult -> coffee). */
+  away?: boolean;
 }
 
 function AgentLabelComponent({
   name,
   position,
   glyph,
+  task,
+  state,
+  isTyping = false,
+  idleMs = 0,
+  away = false,
 }: AgentLabelProps): ReactNode {
   coMark("label");
+  // Issue 226 R6 (operator): effect props from the upstream (MIT) effect set.
+  const typingTex = usePixiTexture("/sprites/effects/typing.png");
+  const sleepingTex = usePixiTexture("/sprites/effects/sleeping.png");
+  const coffeeTex = usePixiTexture("/sprites/effects/need-coffee.png");
+
+  const needsPermission = state === "waiting_permission";
+  const sleeping = !isTyping && !away && idleMs > 3 * 60 * 1000;
+
+  // Pulsing permission badge - driven straight on the node (no re-render).
+  const alertRef = useRef<Container | null>(null);
+  useTick((ticker) => {
+    const node = alertRef.current;
+    if (node) {
+      node.alpha = 0.55 + 0.45 * Math.abs(Math.sin(ticker.lastTime / 550));
+    }
+  });
+
+  const taskText = task ? (task.length > 34 ? task.slice(0, 33) + "\u2026" : task) : null;
+  const chipW = taskText ? Math.min(430, 60 + taskText.length * 12) : 0;
+
   return (
     // Issue 226 R4: label sits ABOVE the sprite head (133px tall) instead of
     // across the character's chest.
@@ -572,6 +606,73 @@ function AgentLabelComponent({
           style={{ fontSize: 26 }}
           resolution={2}
         />
+      ) : null}
+
+      {/* Task chip - DARK MODE: muted text on a dark panel, never bright white
+          on the room art (operator 2026-10-03). */}
+      {taskText ? (
+        <pixiContainer y={-40}>
+          <pixiGraphics
+            draw={(g) => {
+              g.clear();
+              g.roundRect(-chipW / 2, -15, chipW, 30, 8);
+              g.fill({ color: 0x0b0f16, alpha: 0.9 });
+              g.stroke({ width: 2, color: 0x27313f });
+            }}
+          />
+          <pixiText
+            text={taskText}
+            anchor={0.5}
+            style={{
+              fontFamily: "monospace",
+              fontSize: 19,
+              fill: 0x9fb0c3,
+            }}
+            resolution={2}
+          />
+        </pixiContainer>
+      ) : null}
+
+      {/* Permission-waiting alert: pulsing amber badge, the one state that
+          needs the operator to act. */}
+      {needsPermission ? (
+        <pixiContainer ref={alertRef} y={-78}>
+          <pixiGraphics
+            draw={(g) => {
+              g.clear();
+              g.roundRect(-150, -19, 300, 38, 10);
+              g.fill({ color: 0x2a1a05, alpha: 0.95 });
+              g.stroke({ width: 3, color: 0xf59e0b });
+            }}
+          />
+          <pixiText
+            text="\u23f3 APPROVAL NEEDED"
+            anchor={0.5}
+            style={{
+              fontFamily: "monospace",
+              fontSize: 24,
+              fill: 0xfbbf24,
+              fontWeight: "bold",
+            }}
+            resolution={2}
+          />
+        </pixiContainer>
+      ) : null}
+
+      {/* Typing keyboard at the hands while tool-active. Local y 118 == seat
+          y -34 (the container sits 152px above the feet). */}
+      {isTyping && typingTex ? (
+        <pixiSprite texture={typingTex} anchor={0.5} x={30} y={118} scale={0.5} />
+      ) : null}
+
+      {/* Coffee while away on a break / consult walk. */}
+      {away && !isTyping && coffeeTex ? (
+        <pixiSprite texture={coffeeTex} anchor={0.5} x={52} y={92} scale={0.45} />
+      ) : null}
+
+      {/* Sleeping Zzz after several idle minutes. */}
+      {sleeping && sleepingTex ? (
+        <pixiSprite texture={sleepingTex} anchor={0.5} x={56} y={-6} scale={0.45} />
       ) : null}
     </pixiContainer>
   );

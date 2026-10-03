@@ -1114,6 +1114,15 @@ export function OfficeGame(): ReactNode {
                           name={agent.name!}
                           position={{ x: 0, y: 0 }}
                           glyph={agentStateGlyph(agent)}
+                          task={agent.currentTask}
+                          state={agent.backendState}
+                          isTyping={agent.isTyping}
+                          idleMs={idleTick - (agent.lastActivityAt ?? idleTick)}
+                          away={
+                            Math.abs(getOffset(agent.id).x) +
+                              Math.abs(getOffset(agent.id).y) >
+                            40
+                          }
                         />
                       </BehaviorGroup>
                     ))}
