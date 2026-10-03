@@ -72,10 +72,18 @@ export function DeskCluster({
     <>
       {DESKS.map((desk, i) => {
         if (!occupied.has(i + 1)) return null;
-        // Seat i+1 sits at a SPECIFIC furniture desk (seat/furniture orderings
-        // differ - see SEAT_TO_DESK_INDEX).
+        // Issue 226 R6f (operator, twice): the authored furniture positions do
+        // NOT line up with the seat positions (they are separate orderings),
+        // which is why characters appeared to face away from their desks.
+        // Draw the workstation AT the seat instead - then "at the desk" and
+        // "facing the monitor" are true by construction.
         const paired = DESKS[SEAT_TO_DESK_INDEX[i]] ?? desk;
-        return <DeskSprite key={`desk-${i}`} desk={paired} />;
+        return (
+          <DeskSprite
+            key={`desk-${i}`}
+            desk={{ kind: paired.kind, position: desk.position }}
+          />
+        );
       })}
     </>
   );
@@ -180,7 +188,6 @@ function Lounge(): ReactNode {
 export function OfficeDecor(): ReactNode {
   return (
     <>
-      <Lounge />
       {DECOR.map((d, i) => (
         <DecorSprite key={`decor-${i}`} path={d.path} art={d.art} h={d.h} />
       ))}

@@ -413,19 +413,12 @@ function seatFacingFor(agent: {
   if (agent.name === "TruFreedom") return "front-left";
   const deskNum = deskAssignmentCache.get(agent.id) ?? agent.desk;
   if (deskNum) {
-    // Issue 226 R6e (operator: "characters are facing the wall ... face their
-    // computer"): aim the sprite at the desk's SCREEN (upper part of the desk
-    // sprite), not at the desk's floor anchor - that is what puts the body
-    // square to the monitor instead of turned away from it.
+    // Issue 226 R6f: the desk now renders AT the seat (see DeskCluster), so
+    // the monitor is directly in front of the character (up-screen). Looking
+    // at it means the REAR sprites, angled toward the room centre so the pair
+    // reads correctly from the default camera.
     const seat = getSpotForDesk(deskNum).position;
-    const desk = seatDeskFor(deskNum);
-    if (desk) {
-      const dx = desk.position.x - seat.x;
-      const dy = desk.position.y - 120 - seat.y; // screen sits ~120px up
-      if (dy < 0) return dx >= 0 ? "rear-right" : "rear-left";
-      return dx >= 0 ? "front-right" : "front-left";
-    }
-    return getSpotForDesk(deskNum).facing;
+    return seat.x < 640 ? "rear-right" : "rear-left";
   }
   return undefined;
 }
