@@ -66,6 +66,7 @@ import {
 } from "@/themes/w17ant-spots";
 import { setBehavior, tickBehaviors, getOffset } from "@/systems/officeBehavior";
 import type { AgentAnimationState } from "@/stores/slices/types";
+import { withPersistentIdentities } from "@/systems/persistentIdentities";
 import { coMark } from "@/utils/coMark";
 import {
   CANVAS_WIDTH,
@@ -427,6 +428,34 @@ const PERSISTENT_SEEDS: { name: string; id: string }[] = [
   { name: "TruFreedom", id: "ai-explorer" },
 ];
 
+function makePersistentSeed(
+  name: string,
+  id: string,
+): AgentAnimationState {
+  const now = Date.now();
+  return {
+    id,
+    name,
+    color: "#64748b",
+    number: 0,
+    desk: null,
+    backendState: "idle",
+    currentTask: null,
+    characterType: null,
+    parentSessionId: null,
+    parentId: null,
+    phase: "idle",
+    currentPosition: { x: 0, y: 0 },
+    targetPosition: { x: 0, y: 0 },
+    path: null,
+    bubble: { content: null, queue: [], displayStartTime: 0 },
+    queueType: null,
+    queueIndex: -1,
+    isTyping: false,
+    lastActivityAt: now,
+  };
+}
+
 function seedPersistentIdentities(): void {
   const now = Date.now();
   for (const { name, id } of PERSISTENT_SEEDS) {
@@ -735,30 +764,14 @@ export function OfficeGame(): ReactNode {
     const real = Array.from(agents.values()).filter((a) =>
       isRecentlyActive(a, idleTick),
     );
-    // Issue 226 R7: the four persistent identities never flicker - remember
-    // each one's last real state and stand it back on the floor if the room
-    // feed drops it (identical id => identical avatar; pinned seat unchanged).
-    const present = new Set<string>();
-    for (const a of real) {
-      if (a.name && PINNED_SEATS[a.name]) {
-        persistentIdentityCache.set(a.name, a);
-        present.add(a.name);
-      }
-    }
-    const standIns: typeof real = [];
-    for (const name of Object.keys(PINNED_SEATS)) {
-      if (!present.has(name)) {
-        const cached =
-          persistentIdentityCache.get(name) ??
-          (() => {
-            seedPersistentIdentities();
-            return persistentIdentityCache.get(name);
-          })();
-        if (cached) standIns.push(cached);
-      }
-    }
-    return [...real, ...standIns];
-  }, [agents, idleTick]);
+    // Issue 226 R8: the SHIPPED path now calls the same pure function that the
+    // controlled test exercises (scripts/persistent-identities.test.ts).
+    return withPersistentIdentities(
+      real,
+      persistentIdentityCache,
+      makePersistentSeed,
+    );
+    }, [agents, idleTick]);
 
   // Issue 226 R5 (operator): render only OCCUPIED desks, and only the desks
   // belonging to pinned identities that are actually on the floor.
