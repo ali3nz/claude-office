@@ -574,7 +574,9 @@ function AgentLabelComponent({
 
   const needsPermission = !alwaysBusy && state === "waiting_permission";
   const sleeping = !alwaysBusy && !isTyping && !away && idleMs > 3 * 60 * 1000;
-  const showTyping = isTyping || alwaysBusy;
+  // Issue 226 R6d (operator): the Sols type only when they REALLY are -
+  // permanent typing looks stupid. alwaysBusy still hides status text.
+  const showTyping = isTyping;
 
   // Pulsing permission badge - driven straight on the node (no re-render).
   const alertRef = useRef<Container | null>(null);
