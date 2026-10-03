@@ -229,7 +229,9 @@ export const SEAT_FACINGS: readonly OfficeFacing[] = Array.from(
  * the rug); the others get dedicated desks outside the 10-workstation pool so
  * they can never collide with a session character.
  */
-export const BOSS_SEAT: Position = { x: 640, y: 905 };
+// Sol turn-8 spec: desk 640,810 / character 640,850 - the standard 40px
+// workstation relationship, moved 55px inward from the bottom vertex.
+export const BOSS_SEAT: Position = { x: 640, y: 850 };
 
 export const PINNED_SEATS: Record<string, Position> = {
   // Issue 226 R6j (operator: "move sol docker and ghost in a bit so they are
@@ -253,10 +255,9 @@ export const BOSS_DESK: DeskFurniture = {
   // is anchored at his seat (PINNED_SEATS["Sol Docker"] = 640,958) so he reads
   // as standing AT it rather than in front of a desk far behind him.
   position: {
-    // Sol verdict 2026-10-03: he stays at the bottom-centre desk with the
-    // REAR sprite, which is the correct visual language for facing a monitor.
-    // The desk anchors ABOVE his seat so the screens render in front of him.
+    // Sol turn-8 spec: desk anchor 640,810 (character 640,850 -> exact 40px
+    // relationship; no longer against the bottom vertex).
     x: BOSS_RUG_POSITION.x,
-    y: 905 - 74,
+    y: 810,
   },
 };

@@ -149,52 +149,57 @@ function DecorSprite({
  * palette) and the biggest upstream props are added around it.
  */
 function Lounge(): ReactNode {
-  // Scaled against known references: a character is 133 canvas px tall, a desk
-  // ~180 px. Sofa 176 wide x 62 tall, rug 250x140, table 70x34.
+  // Sol turn-8 spec, verbatim: deliberately HARD-EDGED pixel art, rectangles
+  // only (no rounded rects, no alpha, no gradients), palette taken from the
+  // room. Footprint inside x 500..780 / y 380..515 (above the desk cluster).
   return (
     <>
-      {/* rug */}
+      {/* RUG: blocky stepped corners, 4px border band, opaque fills */}
       <pixiGraphics
         draw={(g) => {
           g.clear();
-          g.roundRect(505, 560, 250, 140, 28);
-          g.fill({ color: 0x1b2433, alpha: 0.95 });
-          g.roundRect(514, 568, 232, 124, 24);
-          g.fill({ color: 0x223047, alpha: 0.95 });
+          // stepped outer plate (6-8px steps)
+          g.rect(538, 392, 204, 116); // top edge inset by the steps
+          g.rect(530, 400, 220, 100);
+          g.rect(538, 500, 204, 8);
+          g.fill(0x52667a); // border band
+          g.rect(538, 400, 204, 100);
+          g.fill(0x26364a); // fill
+          g.rect(546, 408, 188, 84);
+          g.fill(0x31465e); // inner field
         }}
       />
-      {/* sofa */}
+      {/* SOFA: back (14px), body, arms (18px), seat front, shadow, highlight */}
       <pixiGraphics
         draw={(g) => {
           g.clear();
-          g.roundRect(548, 505, 164, 30, 10);
-          g.fill(0x2f3d55);
-          g.roundRect(542, 530, 176, 30, 9);
-          g.fill(0x3b4b68);
-          g.roundRect(530, 508, 16, 52, 6);
-          g.fill(0x2a3750);
-          g.roundRect(714, 508, 16, 52, 6);
-          g.fill(0x2a3750);
+          g.rect(558, 402, 164, 14);
+          g.fill(0x40566e); // back
+          g.rect(576, 416, 128, 8);
+          g.fill(0x607892); // highlight band
+          g.rect(558, 424, 164, 30);
+          g.fill(0x40566e); // body
+          g.rect(558, 444, 164, 10);
+          g.fill(0x4c647d); // seat/front
+          g.rect(558, 402, 18, 52);
+          g.fill(0x283849); // left arm
+          g.rect(704, 402, 18, 52);
+          g.fill(0x283849); // right arm
         }}
       />
-      {/* coffee table */}
+      {/* COFFEE TABLE: hard rects, four short pixel legs */}
       <pixiGraphics
         draw={(g) => {
           g.clear();
-          g.roundRect(595, 612, 70, 34, 7);
-          g.fill(0x4a3524);
-          g.roundRect(600, 617, 60, 24, 5);
-          g.fill(0x5c422c);
-        }}
-      />
-      {/* floor lamp */}
-      <pixiGraphics
-        draw={(g) => {
-          g.clear();
-          g.rect(734, 470, 4, 96);
-          g.fill(0x33405a);
-          g.roundRect(716, 452, 40, 22, 8);
-          g.fill({ color: 0xf3e3b3, alpha: 0.9 });
+          g.rect(594, 465, 92, 26);
+          g.fill(0x76573f); // top
+          g.rect(594, 483, 92, 8);
+          g.fill(0x4e382b); // front/shadow
+          g.rect(594, 465, 92, 4);
+          g.fill(0x9a7555); // highlight edge
+          g.rect(600, 491, 6, 10);
+          g.rect(674, 491, 6, 10);
+          g.fill(0x4e382b); // legs
         }}
       />
     </>
@@ -205,6 +210,12 @@ function Lounge(): ReactNode {
 export function OfficeDecor(): ReactNode {
   return (
     <>
+      <Lounge />
+      {/* Sol: pair the lounge with real assets - plants just outside the rug
+          and a cat ON the rug beside the table. */}
+      <DecorSprite path="/sprites/decoration/monstera-plant.png" art={[46.9, 45.2]} h={71} />
+      <DecorSprite path="/sprites/decoration/snake-plant.png" art={[69.3, 48.3]} h={63} />
+      <DecorSprite path="/sprites/cats/cat-bandit.png" art={[59.0, 52.0]} h={34} />
       {DECOR.map((d, i) => (
         <DecorSprite key={`decor-${i}`} path={d.path} art={d.art} h={d.h} />
       ))}
