@@ -412,8 +412,11 @@ function seatFacingFor(agent: {
   if (agent.name === "TruFreedom") return "front-left";
   const deskNum = deskAssignmentCache.get(agent.id) ?? agent.desk;
   if (deskNum) {
-    // Issue 226 R6c: always face the workstation the character stands at.
-    return SEAT_FACINGS[(deskNum - 1) % SEAT_FACINGS.length];
+    // Issue 226 R6d (operator: "face their computer"): use the seat facing
+    // AUTHORED by the W17ant artists, which is calibrated against the desk
+    // that seat belongs to. My computed desk-vector facing pointed the wrong
+    // way for several seats.
+    return getSpotForDesk(deskNum).facing;
   }
   return undefined;
 }
@@ -998,11 +1001,7 @@ export function OfficeGame(): ReactNode {
                             sunglassesTexture={textures.sunglasses}
                             renderBubble={false}
                             renderLabel={false}
-                            isTyping={
-                              agent.isTyping ||
-                              agent.name === "Sol Docker" ||
-                              agent.name === "Sol Webserver"
-                            }
+                            isTyping={agent.isTyping}
                             seatFacing={seatFacingFor(agent)}
                           />
                         </BehaviorGroup>
