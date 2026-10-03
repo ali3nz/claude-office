@@ -172,7 +172,7 @@ export function AgentStatus() {
                     className="text-slate-500 mt-0.5 flex-shrink-0"
                   />
                   <div className="text-slate-300 text-[11px] leading-tight min-w-0">
-                    {agent.currentTask ? (
+                    {agent.currentTask && !/persistent self-learning agent/i.test(agent.currentTask) ? (
                       <span className="line-clamp-2">{agent.currentTask}</span>
                     ) : (
                       <span className="text-slate-600 italic">

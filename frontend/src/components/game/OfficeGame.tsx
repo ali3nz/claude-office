@@ -427,6 +427,9 @@ const SOL_SEATS: Record<string, { x: number; y: number }> = PINNED_SEATS;
  * identity and re-render it when the feed goes quiet - same agent id (so the
  * avatar is identical), same pinned seat, always present.
  */
+const hideBlurb = (t: string | null | undefined): string | null =>
+  t && /persistent self-learning agent/i.test(t) ? null : (t ?? null);
+
 const persistentIdentityCache = new Map<string, AgentAnimationState>();
 
 /**
@@ -1399,7 +1402,7 @@ export function OfficeGame(): ReactNode {
                           position={{ x: 0, y: 0 }}
                           glyph={agentStateGlyph(agent)}
                           task={
-                            agent.currentTask ??
+                            hideBlurb(agent.currentTask) ??
                             agent.bubble.content?.text ??
                             agent.backendState
                           }
@@ -1417,74 +1420,6 @@ export function OfficeGame(): ReactNode {
                           }
                         />
                       </BehaviorGroup>
-                    ))}
-
-                  {/* Character Type Overlays - crown/badge/dot per agent type */}
-                  {visibleAgents
-                    .filter(
-                      (agent) =>
-                        agent.characterType &&
-                        !isInElevatorZone(agent.currentPosition),
-                    )
-                    .map((agent) => (
-                      <pixiContainer
-                        key={`chartype-${agent.id}`}
-                        zIndex={agent.currentPosition.y + 20}
-                      >
-                        {/* Lead crown overlay */}
-                        {agent.characterType === "lead" && (
-                          <pixiText
-                            text="👑"
-                            style={{ fontSize: 14 }}
-                            x={agent.currentPosition.x - 8}
-                            y={agent.currentPosition.y - 52}
-                          />
-                        )}
-
-                        {/* Teammate badge + nameplate overlay */}
-                        {agent.characterType === "teammate" && (
-                          <>
-                            <pixiText
-                              text="🎖️"
-                              style={{ fontSize: 10 }}
-                              x={agent.currentPosition.x - 6}
-                              y={agent.currentPosition.y - 46}
-                            />
-                            {agent.name && (
-                              <pixiText
-                                text={agent.name}
-                                style={{
-                                  fontSize: 7,
-                                  fill: agent.color ?? "#3b82f6",
-                                  fontFamily: "monospace",
-                                  fontWeight: "bold",
-                                }}
-                                x={agent.currentPosition.x - 18}
-                                y={agent.currentPosition.y - 34}
-                              />
-                            )}
-                          </>
-                        )}
-
-                        {/* Subagent shoulder dot */}
-                        {agent.characterType === "subagent" &&
-                          (() => {
-                            const parentAgent = agent.parentId
-                              ? Array.from(agents.values()).find(
-                                  (a) => a.id === agent.parentId,
-                                )
-                              : null;
-                            const dotColor = parentAgent?.color ?? "#f59e0b";
-                            return (
-                              <SubagentDot
-                                key={`dot-${agent.id}`}
-                                x={agent.currentPosition.x + 10}
-                                y={agent.currentPosition.y - 28}
-                                color={dotColor}
-                              />
-                            );
-                          })()}
-                      </pixiContainer>
                     ))}
 
                   {/* Bubbles Layer - rendered on top of everything */}

@@ -15,6 +15,7 @@ import { type ReactNode } from "react";
 import { usePixiTexture } from "@/hooks/usePixiTexture";
 import { artToCanvas } from "@/themes/w17ant-spots";
 import { EditableSprite, useEntityTurn } from "./edit/EditableSprite";
+import { drawPoolTable, drawCouch } from "@/systems/isoDraw";
 import { turnDeskKind, turnedSprite } from "@/systems/facingCycle";
 import {
   DESKS,
@@ -238,64 +239,18 @@ function LoungePiece({
 }
 
 function Lounge(): ReactNode {
-  // Sol turn-8 spec, verbatim: deliberately HARD-EDGED pixel art, rectangles
-  // only (no rounded rects, no alpha, no gradients), palette taken from the
-  // room. Footprint inside x 500..780 / y 380..515 (above the desk cluster).
+  // Issue 246 follow-up: pool table + two couches (isometric Graphics), each a
+  // normal editable object. Old flat rug/sofa/table were removed.
   return (
     <>
-      {/* RUG: blocky stepped corners, 4px border band, opaque fills */}
-      <LoungePiece id="lounge-rug" name="Lounge Rug" bx={530} by={392} bw={220} bh={116} zBias={-2000}>
-        <pixiGraphics
-        draw={(g) => {
-          g.clear();
-          // stepped outer plate (6-8px steps)
-          g.rect(538, 392, 204, 116); // top edge inset by the steps
-          g.rect(530, 400, 220, 100);
-          g.rect(538, 500, 204, 8);
-          g.fill(0x52667a); // border band
-          g.rect(538, 400, 204, 100);
-          g.fill(0x26364a); // fill
-          g.rect(546, 408, 188, 84);
-          g.fill(0x31465e); // inner field
-        }}
-      />
+      <LoungePiece id="pool-table" name="Pool Table" bx={540} by={436} bw={200} bh={134} zBias={0}>
+        <pixiGraphics draw={(g) => drawPoolTable(g, 640, 520)} />
       </LoungePiece>
-      {/* SOFA: back (14px), body, arms (18px), seat front, shadow, highlight */}
-      <LoungePiece id="lounge-sofa" name="Lounge Sofa" bx={558} by={402} bw={164} bh={52} zBias={-1500}>
-        <pixiGraphics
-        draw={(g) => {
-          g.clear();
-          g.rect(558, 402, 164, 14);
-          g.fill(0x40566e); // back
-          g.rect(576, 416, 128, 8);
-          g.fill(0x607892); // highlight band
-          g.rect(558, 424, 164, 30);
-          g.fill(0x40566e); // body
-          g.rect(558, 444, 164, 10);
-          g.fill(0x4c647d); // seat/front
-          g.rect(558, 402, 18, 52);
-          g.fill(0x283849); // left arm
-          g.rect(704, 402, 18, 52);
-          g.fill(0x283849); // right arm
-        }}
-      />
+      <LoungePiece id="couch-left" name="Couch (left)" bx={435} by={403} bw={130} bh={100} zBias={0}>
+        <pixiGraphics draw={(g) => drawCouch(g, 500, 470, true)} />
       </LoungePiece>
-      {/* COFFEE TABLE: hard rects, four short pixel legs */}
-      <LoungePiece id="lounge-table" name="Coffee Table" bx={594} by={465} bw={92} bh={36} zBias={-1400}>
-        <pixiGraphics
-        draw={(g) => {
-          g.clear();
-          g.rect(594, 465, 92, 26);
-          g.fill(0x76573f); // top
-          g.rect(594, 483, 92, 8);
-          g.fill(0x4e382b); // front/shadow
-          g.rect(594, 465, 92, 4);
-          g.fill(0x9a7555); // highlight edge
-          g.rect(600, 491, 6, 10);
-          g.rect(674, 491, 6, 10);
-          g.fill(0x4e382b); // legs
-        }}
-      />
+      <LoungePiece id="couch-right" name="Couch (right)" bx={715} by={403} bw={130} bh={100} zBias={0}>
+        <pixiGraphics draw={(g) => drawCouch(g, 780, 470, false)} />
       </LoungePiece>
     </>
   );

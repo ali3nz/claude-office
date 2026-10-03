@@ -245,8 +245,11 @@ function AgentSpriteComponent({
   // Operator (issue 226 R5): Sol Docker is the BOSS - pin the Mike Scott
   // avatar so the role reads at a glance and never shuffles. Other persistent
   // identities keep their deterministic hash avatar (stable per agent id).
+  const avatarOverride = useOfficeEditStore((s) => s.overrides[id]?.avatar);
   const slug =
-    (name && PINNED_CAST_BY_NAME[name]) || getCastForAgent(id);
+    avatarOverride ||
+    (name && PINNED_CAST_BY_NAME[name]) ||
+    getCastForAgent(id);
 
   // Facing from movement. The animation loop moves agents between renders, so
   // the direction must be derived from the render-phase position delta — the

@@ -20,6 +20,8 @@ export interface EntityOverride {
   turn?: number;
   /** Deleted (hidden) by the operator; Reset restores. */
   hidden?: boolean;
+  /** Cast avatar slug chosen by the operator (agents only). */
+  avatar?: string;
 }
 
 export interface InsertedSprite {
@@ -117,6 +119,7 @@ interface OfficeEditState {
   rotateEntity: (id: string) => void;
   /** Delete any object: inserted sprites are removed, built-ins are hidden. */
   deleteEntity: (id: string) => void;
+  setAvatar: (id: string, slug: string) => void;
   insertEntity: (spritePath: string, x: number, y: number, name?: string) => string;
   removeInsertedEntity: (id: string) => void;
   setIsDragging: (dragging: boolean) => void;
@@ -203,6 +206,17 @@ export const useOfficeEditStore = create<OfficeEditState>((set, get) => ({
       };
       saveOverrides(updatedOverrides);
       return { overrides: updatedOverrides };
+    });
+  },
+
+  setAvatar: (id: string, slug: string) => {
+    set((state) => {
+      const updated = {
+        ...state.overrides,
+        [id]: { ...state.overrides[id], avatar: slug || undefined },
+      };
+      saveOverrides(updated);
+      return { overrides: updated };
     });
   },
 

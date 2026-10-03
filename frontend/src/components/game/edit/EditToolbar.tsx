@@ -21,6 +21,9 @@ import {
   Check,
 } from "lucide-react";
 import { useOfficeEditStore } from "@/stores/officeEditStore";
+import { useGameStore, selectAgents } from "@/stores/gameStore";
+import { PERSISTENT_IDS } from "@/systems/persistentIdentities";
+import { OFFICE_CHARACTERS, displayNameFromSlug } from "@/themes/w17ant-cast";
 
 export function EditToolbar() {
   const isEditMode = useOfficeEditStore((s) => s.isEditMode);
@@ -30,6 +33,12 @@ export function EditToolbar() {
   const selectedEntityId = useOfficeEditStore((s) => s.selectedEntityId);
   const selectEntity = useOfficeEditStore((s) => s.selectEntity);
   const rotateEntity = useOfficeEditStore((s) => s.rotateEntity);
+  const agentsMap = useGameStore(selectAgents);
+  const setAvatar = useOfficeEditStore((s) => s.setAvatar);
+  const avatarValue = useOfficeEditStore((s) =>
+    selectedEntityId ? (s.overrides[selectedEntityId]?.avatar ?? "") : "",
+  );
+  const isAgent = selectedEntityId ? agentsMap.has(selectedEntityId) || PERSISTENT_IDS.has(selectedEntityId) : false;
   const deleteEntity = useOfficeEditStore((s) => s.deleteEntity);
   const resetAllEdits = useOfficeEditStore((s) => s.resetAllEdits);
   const insertedEntities = useOfficeEditStore((s) => s.insertedEntities);
@@ -160,6 +169,21 @@ export function EditToolbar() {
             <span>Rotate</span>
           </button>
 
+          {isAgent && (
+            <select
+              value={avatarValue}
+              onChange={(e) => setAvatar(selectedEntityId!, e.target.value)}
+              className="px-2 py-1.5 bg-slate-800 text-slate-100 rounded-lg border border-slate-600 text-xs"
+              title="Change avatar"
+            >
+              <option value="">Avatar: default</option>
+              {OFFICE_CHARACTERS.map((c) => (
+                <option key={c} value={c}>
+                  {displayNameFromSlug(c)}
+                </option>
+              ))}
+            </select>
+          )}
           {/* Delete works on ANY selected object (built-ins are hidden; Reset restores) */}
           <button
             onClick={handleDelete}
