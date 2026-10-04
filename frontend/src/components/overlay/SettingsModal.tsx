@@ -14,6 +14,13 @@ import { LOBBY_FLOOR_ID } from "@/types/navigation";
 import { useTranslation } from "@/hooks/useTranslation";
 import { locales, type Locale } from "@/i18n";
 import { BuildingTab } from "@/components/settings/BuildingTab";
+import {
+  captureCurrentLayout,
+  fetchSavedLayouts,
+  loadNamedLayout,
+  saveNamedLayout,
+  type SavedLayoutSummary,
+} from "@/systems/layoutSync";
 
 // Issue 246: room/area selection persistence (Settings -> Office Layout).
 const AREA_STORAGE_KEY = "claude-office-floor";
@@ -24,6 +31,13 @@ const AREA_SINGLE = "__single__";
 // ============================================================================
 
 type SettingsTab = "general" | "building";
+type LayoutMessageKey =
+  | "settings.layoutNameRequired"
+  | "settings.layoutListFailed"
+  | "settings.layoutSaved"
+  | "settings.layoutSaveFailed"
+  | "settings.layoutLoaded"
+  | "settings.layoutLoadFailed";
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -86,6 +100,14 @@ export default function SettingsModal({
 }: SettingsModalProps): ReactNode {
   const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab);
   const [buildingDirty, setBuildingDirty] = useState(false);
+  const [savedLayouts, setSavedLayouts] = useState<SavedLayoutSummary[]>([]);
+  const [layoutName, setLayoutName] = useState("");
+  const [selectedLayoutName, setSelectedLayoutName] = useState("");
+  const [layoutBusy, setLayoutBusy] = useState<"save" | "load" | null>(null);
+  const [layoutMessage, setLayoutMessage] = useState<{
+    key: LayoutMessageKey;
+    isError: boolean;
+  } | null>(null);
 
   // Sync tab when initialTab changes (e.g. edit-building request).
   useEffect(() => {
@@ -157,6 +179,61 @@ export default function SettingsModal({
   );
 
   const { t } = useTranslation();
+
+  const refreshSavedLayouts = useCallback(async (): Promise<void> => {
+    try {
+      const layouts = await fetchSavedLayouts();
+      setLayoutMessage(null);
+      setSavedLayouts(layouts);
+      setSelectedLayoutName((current) =>
+        layouts.some((layout) => layout.name === current)
+          ? current
+          : layouts[0]?.name ?? "",
+      );
+    } catch {
+      setLayoutMessage({ key: "settings.layoutListFailed", isError: true });
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    void refreshSavedLayouts();
+  }, [isOpen, refreshSavedLayouts]);
+
+  const handleSaveNamedLayout = async (): Promise<void> => {
+    const name = layoutName.trim().normalize("NFC");
+    if (!name) {
+      setLayoutMessage({ key: "settings.layoutNameRequired", isError: true });
+      return;
+    }
+    setLayoutBusy("save");
+    setLayoutMessage(null);
+    try {
+      const savedName = await saveNamedLayout(name, captureCurrentLayout());
+      setLayoutName(savedName);
+      setSelectedLayoutName(savedName);
+      await refreshSavedLayouts();
+      setLayoutMessage({ key: "settings.layoutSaved", isError: false });
+    } catch {
+      setLayoutMessage({ key: "settings.layoutSaveFailed", isError: true });
+    } finally {
+      setLayoutBusy(null);
+    }
+  };
+
+  const handleLoadNamedLayout = async (): Promise<void> => {
+    if (!selectedLayoutName) return;
+    setLayoutBusy("load");
+    setLayoutMessage(null);
+    try {
+      await loadNamedLayout(selectedLayoutName);
+      setLayoutMessage({ key: "settings.layoutLoaded", isError: false });
+    } catch {
+      setLayoutMessage({ key: "settings.layoutLoadFailed", isError: true });
+    } finally {
+      setLayoutBusy(null);
+    }
+  };
 
   const handleDirtyChange = useCallback((dirty: boolean) => {
     setBuildingDirty(dirty);
@@ -515,6 +592,68 @@ export default function SettingsModal({
               checked={isEditMode}
               onChange={() => setEditMode(!isEditMode)}
             />
+
+            <div className="mt-3 space-y-2">
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <input
+                  type="text"
+                  aria-label={t("settings.layoutName")}
+                  maxLength={64}
+                  value={layoutName}
+                  onChange={(event) => setLayoutName(event.target.value)}
+                  placeholder={t("settings.layoutNamePlaceholder")}
+                  className="min-w-0 flex-1 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-200 placeholder:text-slate-500 focus:border-purple-500 focus:outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={() => void handleSaveNamedLayout()}
+                  disabled={layoutBusy !== null || !layoutName.trim()}
+                  className="rounded-lg bg-purple-600 px-3 py-2 text-xs font-bold text-white transition-colors hover:bg-purple-500 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {layoutBusy === "save"
+                    ? t("settings.savingLayout")
+                    : t("settings.saveLayout")}
+                </button>
+              </div>
+
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <select
+                  aria-label={t("settings.savedLayouts")}
+                  value={selectedLayoutName}
+                  onChange={(event) => setSelectedLayoutName(event.target.value)}
+                  className="min-w-0 flex-1 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-200 focus:border-purple-500 focus:outline-none"
+                >
+                  <option value="">
+                    {savedLayouts.length
+                      ? t("settings.selectSavedLayout")
+                      : t("settings.noSavedLayouts")}
+                  </option>
+                  {savedLayouts.map((layout) => (
+                    <option key={layout.name} value={layout.name}>
+                      {layout.name}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={() => void handleLoadNamedLayout()}
+                  disabled={layoutBusy !== null || !selectedLayoutName}
+                  className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-xs font-bold text-slate-200 transition-colors hover:border-purple-500 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {layoutBusy === "load"
+                    ? t("settings.loadingLayout")
+                    : t("settings.loadLayout")}
+                </button>
+              </div>
+              {layoutMessage && (
+                <p
+                  role={layoutMessage.isError ? "alert" : "status"}
+                  className={`text-xs ${layoutMessage.isError ? "text-rose-400" : "text-emerald-400"}`}
+                >
+                  {t(layoutMessage.key)}
+                </p>
+              )}
+            </div>
 
             {/* Issue 246: change the room to a different floor / area. */}
             <div className="mt-4">

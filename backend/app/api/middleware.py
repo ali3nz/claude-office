@@ -83,16 +83,18 @@ def _is_state_changing(path: str, method: str) -> bool:
     """Return True if the request targets a destructive or side-effecting endpoint.
 
     Covers global destructive operations (clearing all sessions, running a
-    simulation) and per-session OS side effects (terminal activation + clipboard
-    write via ``/focus``). Other per-session mutations remain open in the default
-    configuration and are fully gated when an explicit key is set (handled by
-    ``settings.has_explicit_key`` in the middleware).
+    simulation), per-session OS side effects (terminal activation + clipboard
+    write via ``/focus``), and writes to named shared office layouts. Other
+    per-session mutations remain open in the default configuration and are fully
+    gated when an explicit key is set (handled by ``settings.has_explicit_key``).
     """
     prefix = settings.API_V1_STR + "/sessions"
+    saved_layout_prefix = settings.API_V1_STR + "/layout/saved/"
     return (
         (path == prefix and method == "DELETE")
         or (path == f"{prefix}/simulate" and method == "POST")
         or (path.startswith(f"{prefix}/") and path.endswith("/focus") and method == "POST")
+        or (path.startswith(saved_layout_prefix) and method == "PUT")
     )
 
 

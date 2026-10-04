@@ -28,7 +28,7 @@ import { useNavigationStore } from "@/stores/navigationStore";
 import { LOBBY_FLOOR_ID } from "@/types/navigation";
 
 const LAYOUT_PATH = "/api/v1/layout";
-const AREA_STORAGE_KEY = "claude-office-floor";
+const SAVED_LAYOUTS_PATH = `${LAYOUT_PATH}/saved`;
 const AREA_SINGLE = "__single__";
 const PUSH_DEBOUNCE_MS = 900;
 const POLL_MS = 60_000;
@@ -53,17 +53,20 @@ async function fetchServerLayout(): Promise<SharedLayout | null> {
   }
 }
 
-async function pushLayout(layout: SharedLayout): Promise<void> {
+async function pushLayout(layout: SharedLayout): Promise<boolean> {
   try {
     const res = await apiFetch(LAYOUT_PATH, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ layout }),
     });
-    if (res.ok) serverUpdatedAt = Math.max(serverUpdatedAt, layout.updatedAt);
+    if (!res.ok) return false;
+    serverUpdatedAt = Math.max(serverUpdatedAt, layout.updatedAt);
+    return true;
   } catch {
     // Offline: the local cache still holds the arrangement; the next edit or
     // poll retries.
+    return false;
   }
 }
 
@@ -78,14 +81,82 @@ function applyServerLayout(layout: SharedLayout): void {
   }
 }
 
+/** Capture the in-memory arrangement and the currently selected room/area. */
+export function captureCurrentLayout(): SharedLayout {
+  const edit = useOfficeEditStore.getState();
+  const navigation = useNavigationStore.getState();
+  const existing = readLocalLayout();
+  const area =
+    navigation.view === "single"
+      ? AREA_SINGLE
+      : navigation.floorId ?? existing?.area;
+  return {
+    version: 1,
+    updatedAt: Date.now(),
+    overrides: edit.overrides,
+    inserted: edit.insertedEntities,
+    ...(area ? { area } : {}),
+  };
+}
+
+export interface SavedLayoutSummary {
+  name: string;
+  savedAt: number;
+}
+
+/** Read the server-owned list of named layout snapshots. */
+export async function fetchSavedLayouts(): Promise<SavedLayoutSummary[]> {
+  const res = await apiFetch(SAVED_LAYOUTS_PATH);
+  if (!res.ok) throw new Error("Could not fetch saved layouts");
+  const data = (await res.json()) as { layouts?: SavedLayoutSummary[] };
+  return Array.isArray(data.layouts) ? data.layouts : [];
+}
+
+/** Save an explicit snapshot to the server's named-layout collection. */
+export async function saveNamedLayout(
+  name: string,
+  layout: SharedLayout,
+): Promise<string> {
+  const res = await apiFetch(
+    `${SAVED_LAYOUTS_PATH}/${encodeURIComponent(name)}`,
+    {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(layout),
+    },
+  );
+  if (!res.ok) throw new Error("Could not save layout");
+  const data = (await res.json()) as { name?: string };
+  return data.name ?? name;
+}
+
+/** Load a server snapshot and publish it as the current shared layout. */
+export async function loadNamedLayout(name: string): Promise<void> {
+  const res = await apiFetch(
+    `${SAVED_LAYOUTS_PATH}/${encodeURIComponent(name)}`,
+  );
+  if (!res.ok) throw new Error("Could not load layout");
+  const data = (await res.json()) as { layout?: SharedLayout | null };
+  if (!data.layout) throw new Error("Saved layout is empty");
+
+  applyServerLayout({ ...data.layout, updatedAt: Date.now() });
+  applyPendingArea();
+  await publishCurrentLayoutAndWait();
+}
+
 /** Publish the current browser layout (toolbar Publish button / first edit). */
 export function publishCurrentLayout(): void {
+  void publishCurrentLayoutAndWait().catch(() => undefined);
+}
+
+/** Publish and wait for the shared API, used when explicitly loading a layout. */
+export async function publishCurrentLayoutAndWait(): Promise<void> {
   const local = readLocalLayout();
-  if (!local) return;
+  if (!local) throw new Error("There is no current office layout");
   // Stamp it now so it wins over whatever the server had.
   local.updatedAt = Date.now();
   useOfficeEditStore.getState().applySharedLayout(local);
-  void pushLayout(local);
+  if (!(await pushLayout(local))) throw new Error("Could not publish shared layout");
 }
 
 /** Debounced publish after an edit (see the store subscription below). */
