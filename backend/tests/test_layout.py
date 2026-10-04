@@ -153,8 +153,8 @@ def test_named_layout_rejects_invalid_names_and_payloads() -> None:
             "id": "external",
             "spritePath": "https://example.invalid/image.png",
             "name": "External",
-            "x": 1,
-            "y": 2,
+            "x": 20,
+            "y": 20,
         }
     ]
     assert (
@@ -165,6 +165,17 @@ def test_named_layout_rejects_invalid_names_and_payloads() -> None:
         ).status_code
         == 422
     )
+
+
+def test_named_layout_rejects_percent_encoded_sprite_paths() -> None:
+    snapshot = _snapshot()
+    snapshot["inserted"][0]["spritePath"] = "/sprites/%2e%2e/robots.txt"
+    response = client.put(
+        f"/api/v1/layout/saved/{uuid4().hex}",
+        json=snapshot,
+        headers=_headers(),
+    )
+    assert response.status_code == 422
 
 
 def test_named_layout_enforces_snapshot_and_collection_size_limits(monkeypatch) -> None:

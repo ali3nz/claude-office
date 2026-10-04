@@ -62,6 +62,7 @@ class InsertedSpriteBody(BaseModel):
         """Only persist paths that resolve inside the office's sprite tree."""
         if (
             not value.startswith("/sprites/")
+            or "%" in value
             or "\\" in value
             or "?" in value
             or "#" in value
