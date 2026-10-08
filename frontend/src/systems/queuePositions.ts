@@ -11,7 +11,8 @@
  */
 
 import { Position } from "@/types";
-import { getSpotForDesk, artToCanvas } from "@/themes/w17ant-spots";
+import { artToCanvas } from "@/themes/w17ant-spots";
+import { getDeskSeat } from "@/systems/deskSeats";
 
 // Boss desk positions (where agents stand IN FRONT of the desk)
 // W17ant Office theme: boss is at the DM-art desk (≈962, 630 on canvas);
@@ -222,8 +223,10 @@ export function calculateQueueSlots(
  * Grid-aligned: X at multiples of 32, row spacing 192 (6×32)
  */
 export function getDeskPosition(deskNum: number): Position {
-  // W17ant Office theme (issue 212): desks are the real DM-floor art spots
-  // (ported from W17ant rooms.ts main-office agentSpots), cycled by desk
-  // number. The position is the agent's sprite anchor (feet / bottom-center).
-  return getSpotForDesk(deskNum).position;
+  // W17ant Office theme (issue 212): desks are the real DM-floor art spots.
+  // Persistent desk layout: the seat position comes from the SAVED layout
+  // (authored desks minus hidden ones + operator-inserted desks), cycled by
+  // desk number. The position is the agent's sprite anchor (feet / bottom).
+  const seat = getDeskSeat(deskNum);
+  return { x: seat.x, y: seat.y };
 }

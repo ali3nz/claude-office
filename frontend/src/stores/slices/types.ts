@@ -64,6 +64,7 @@ export interface AgentAnimationState {
   desk: number | null;
   backendState: BackendAgentState;
   currentTask: string | null;
+  title: string | null;
   characterType: string | null;
   parentSessionId: string | null;
   parentId: string | null;

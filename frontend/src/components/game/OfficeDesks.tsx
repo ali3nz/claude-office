@@ -18,15 +18,13 @@ import { EditableSprite, useEntityTurn } from "./edit/EditableSprite";
 import { drawPoolTable, drawCouch } from "@/systems/isoDraw";
 import { turnDeskKind, turnedSprite } from "@/systems/facingCycle";
 import {
-  DESKS,
-  DESK_SPOTS,
   BOSS_DESK,
   PINNED_DESKS,
-  SEAT_TO_DESK_INDEX,
   deskSpritePath,
   deskSpriteHeight,
   type DeskFurniture,
 } from "@/themes/w17ant-spots";
+import { useDeskSeats } from "@/systems/deskSeats";
 
 function DeskSprite({
   id,
@@ -90,23 +88,23 @@ export function DeskCluster({
 }: {
   occupied: Set<number>;
 }): ReactNode {
+  // The desk set is FIXED by the saved layout (authored desks minus hidden
+  // ones); only OCCUPIED pool seats draw their workstation, so empty desks
+  // never pop onto the floor. Operator-inserted desks are skipped here and
+  // render through InsertedSpriteView. `occupied` holds 1-based pool seat
+  // numbers (matching assignDeskSeats).
+  const seats = useDeskSeats();
   return (
     <>
-      {DESKS.map((desk, i) => {
-        if (!occupied.has(i + 1)) return null;
-        // Issue 226 R6f (operator, twice): the authored furniture positions do
-        // NOT line up with the seat positions (they are separate orderings),
-        // which is why characters appeared to face away from their desks.
-        // Draw the workstation AT THE SEAT instead - then "at the desk" and
-        // "facing the monitor" are true by construction.
-        const paired = DESKS[SEAT_TO_DESK_INDEX[i]] ?? desk;
-        const seat = DESK_SPOTS[i];
+      {seats.map((seat, i) => {
+        if (!seat.base) return null; // inserted desks draw themselves
+        if (!occupied.has(i + 1)) return null; // empty desk stays off floor
         return (
           <DeskSprite
-            key={`desk-${i}`}
-            id={`desk-${i + 1}`}
+            key={seat.id}
+            id={seat.id}
             name={`Workstation Desk ${i + 1}`}
-            desk={{ kind: paired.kind, position: seat.position }}
+            desk={{ kind: seat.kind, position: { x: seat.x, y: seat.y } }}
           />
         );
       })}
@@ -308,7 +306,6 @@ export function OfficeDecor(): ReactNode {
 const PINNED_DESK_OWNERS = [
   "Sol Webserver",
   "GhostReporting",
-  "TruFreedom",
 ] as const;
 
 /** Persistent-identity workstations (issue 226 R5) - only when present. */

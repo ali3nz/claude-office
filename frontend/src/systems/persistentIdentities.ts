@@ -1,8 +1,8 @@
 /**
  * Persistent identities (issue 226 R7/R8).
  *
- * The four identities that must ALWAYS render with the same seat and the same
- * avatar: the two Sol gateway characters and the two ai-agents. The backend
+ * The three identities that must ALWAYS render with the same seat and the same
+ * avatar: the two Sol gateway characters and the remaining ai-agent. The backend
  * room drops a session between event bursts, so the renderer keeps a cache of
  * the last real state (real backend id) and re-draws a missing identity from
  * that cache - or from the seed, on a cold load.
@@ -16,18 +16,17 @@ export interface PersistentAgent {
   name: string | null;
 }
 
-/** The four identities, with the backend's stable agent ids. */
+/** The three identities, with the backend's stable agent ids. */
 export const PERSISTENT_SEEDS: readonly { name: string; id: string }[] = [
   { name: "Sol Docker", id: "gateway-dockerhost" },
   { name: "Sol Webserver", id: "gateway-webserver" },
   { name: "GhostReporting", id: "ai-companion" },
-  { name: "TruFreedom", id: "ai-explorer" },
 ] as const;
 
 const SEED_NAMES = new Set(PERSISTENT_SEEDS.map((s) => s.name));
 
 /**
- * The four persistent identities by ID - SOL turn-1 review: an `ai-*` prefix
+ * The three persistent identities by ID - SOL turn-1 review: an `ai-*` prefix
  * exemption was WIDER than the requirement (it would make any future
  * `ai-something` agent immortal). Exemptions enumerate these exact IDs.
  */

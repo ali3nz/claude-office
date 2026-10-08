@@ -14,7 +14,7 @@ import {
   DEPARTURE_QUEUE_POSITIONS,
   ELEVATOR_PATHFINDING_TARGET,
 } from "@/systems/queuePositions";
-import { getSpotForDesk } from "@/themes/w17ant-spots";
+import { getDeskSeat } from "@/systems/deskSeats";
 
 // ============================================================================
 // DESK POSITION
@@ -31,7 +31,8 @@ import { getSpotForDesk } from "@/themes/w17ant-spots";
  * @returns Pixel position for the agent's seat anchor
  */
 export function getDeskPosition(deskNum: number): Position {
-  return getSpotForDesk(deskNum).position;
+  const seat = getDeskSeat(deskNum);
+  return { x: seat.x, y: seat.y };
 }
 
 // ============================================================================

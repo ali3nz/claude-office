@@ -89,6 +89,7 @@ export interface GameStore {
       backendState: BackendAgentState;
       name: string | null;
       currentTask: string | null;
+      title?: string | null;
     },
   ) => void;
   updateAgentQueueInfo: (

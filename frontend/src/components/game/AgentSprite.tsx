@@ -549,6 +549,8 @@ export const AgentHeadset = memo(AgentHeadsetComponent);
 
 export interface AgentLabelProps {
   name: string;
+  /** Full conversation name shown under the floor name (issue 360). */
+  conversation?: string | null;
   position: Position;
   /** Issue 226 R4 (Sol): compact state/activity glyph above the name. */
   glyph?: string | null;
@@ -569,6 +571,7 @@ export interface AgentLabelProps {
 
 function AgentLabelComponent({
   name,
+  conversation = null,
   position,
   glyph,
   task,
@@ -600,6 +603,10 @@ function AgentLabelComponent({
   });
 
   const taskText = task ? (task.length > 34 ? task.slice(0, 33) + "\u2026" : task) : null;
+  const convoText =
+    conversation && conversation.length > 42
+      ? conversation.slice(0, 41) + "\u2026"
+      : conversation;
   const chipW = taskText ? Math.min(430, 60 + taskText.length * 12) : 0;
 
   return (
@@ -618,6 +625,34 @@ function AgentLabelComponent({
         }}
         resolution={2}
       />
+      {convoText ? (
+        <pixiText
+          text={convoText}
+          anchor={0.5}
+          y={24}
+          style={{
+            fontFamily: "monospace",
+            fontSize: 15,
+            fill: 0x9fb3c8,
+            stroke: { width: 3, color: 0x000000 },
+          }}
+          resolution={2}
+        />
+      ) : null}
+      {convoText ? (
+        <pixiText
+          text={convoText}
+          anchor={0.5}
+          y={24}
+          style={{
+            fontFamily: "monospace",
+            fontSize: 15,
+            fill: 0x9fb3c8,
+            stroke: { width: 3, color: 0x000000 },
+          }}
+          resolution={2}
+        />
+      ) : null}
       {glyph && !alwaysBusy ? (
         <pixiText
           text={glyph}

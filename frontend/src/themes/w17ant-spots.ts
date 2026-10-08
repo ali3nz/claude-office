@@ -221,9 +221,10 @@ export const SEAT_FACINGS: readonly OfficeFacing[] = Array.from(
  * queue's final position (640, 940) in front of the desk, unblocked.
  */
 /**
- * PERSISTENT identities (operator, issue 226 R5): Sol Docker (Boss),
- * Sol Webserver, GhostReporting and TruFreedom each get a FIXED workstation
- * that never changes, and the two Sol characters never move or take breaks.
+ * PERSISTENT identities (operator, issue 226 R5; TruFreedom removed in
+ * issue 360 - not a live agent): Sol Docker (Boss), Sol Webserver and
+ * GhostReporting each get a FIXED workstation that never changes, and the
+ * two Sol characters never move or take breaks.
  *
  * Seats are feet anchors. Sol Docker sits at the boss desk (front-centre, on
  * the rug); the others get dedicated desks outside the 10-workstation pool so
@@ -239,14 +240,30 @@ export const PINNED_SEATS: Record<string, Position> = {
   "Sol Docker": BOSS_SEAT,
   "Sol Webserver": { x: 1040, y: 700 },
   "GhostReporting": { x: 288, y: 720 },
-  "TruFreedom": { x: 830, y: 850 },
 };
 
 /** Dedicated desks for the pinned seats (the boss desk already exists). */
 export const PINNED_DESKS: DeskFurniture[] = [
   { kind: "right-front", position: { x: 1040, y: 700 } },
   { kind: "left-front", position: { x: 288, y: 720 } },
-  { kind: "right-front", position: { x: 830, y: 850 } },
+];
+
+/**
+ * Standing overflow spots (operator, issue 360): when every workstation is
+ * taken, arrivals stand HERE - around the display board open space, next to
+ * Bandit, by the pool table, and at TruFreedom's old desk spot - instead of
+ * spawning new desks or doubling up. Feet anchors; the operator can drag an
+ * overflow agent in edit mode and the position persists in the saved layout.
+ * Must match OFFICE_OVERFLOW_SPOTS in
+ * backend/app/core/room_orchestrator.py.
+ */
+export const OVERFLOW_SPOTS: Position[] = [
+  { x: 830, y: 850 }, // TruFreedom's old desk spot
+  { x: 560, y: 770 }, // display board front
+  { x: 650, y: 790 }, // display board front-right
+  { x: 470, y: 640 }, // west of pool table (Bandit side)
+  { x: 700, y: 650 }, // south of pool table
+  { x: 400, y: 780 }, // west open floor
 ];
 
 export const BOSS_DESK: DeskFurniture = {

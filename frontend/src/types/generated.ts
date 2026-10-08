@@ -41,6 +41,7 @@ export type Text = string;
 export type Icon = string | null;
 export type Persistent = boolean;
 export type Currenttask = string | null;
+export type Title = string | null;
 export type Charactertype = string | null;
 export type Parentsessionid = string | null;
 export type Parentid = string | null;
@@ -483,6 +484,7 @@ export interface Agent {
   desk?: Desk;
   bubble?: BubbleContent | null;
   currentTask?: Currenttask;
+  title?: Title;
   position?: Position;
   characterType?: Charactertype;
   parentSessionId?: Parentsessionid;

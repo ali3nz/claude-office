@@ -32,6 +32,14 @@ logger = logging.getLogger(__name__)
 # overflow stays in the sidebar but off the floor (no wrap, no collisions).
 OFFICE_ROOM_ID = "office"
 OFFICE_MAX_SEATED = 10  # number of W17ant workstations on the DM floor
+# Stable desk count reported to the UI. The operator's saved layout owns the
+# real desk set (frontend), so this must NEVER grow with agent count - it used
+# to be max(8, len(agents) + 2), which spawned new desks on every arrival.
+OFFICE_DESK_COUNT = OFFICE_MAX_SEATED
+# Standing overflow spots on the DM floor (issue 360): when every desk is
+# taken, arrivals stand here instead of spawning desks or doubling up.
+# Must match OVERFLOW_SPOTS in frontend/src/themes/w17ant-spots.ts.
+OFFICE_OVERFLOW_SPOTS = 6
 
 _RUN_ID_RE = re.compile(r"^orch-(\d{1,4})-([a-z]+)")
 
@@ -42,37 +50,48 @@ GATEWAY_NAMES = {
 }
 
 
-def _first10(text: str) -> str:
-    """First 10 characters (Python slicing is code-point safe, issue 226 R1)."""
-    return str(text or "")[:10]
+def _first20(text: str) -> str:
+    """First 20 characters (Python slicing is code-point safe).
+
+    Issue 226 R1 used 10; issue 360 raised the floor-name cap to 20.
+    """
+    return str(text or "")[:20]
 
 
 def office_session_name(session_id: str, display_name: str | None = None) -> str:
     """Floor name for a session character.
 
-    Issue 226 R1: the operator wants the first 10 characters of the
-    conversation name; gateway characters keep their exact fixed names;
-    untitled sessions keep the deterministic fallback.
+    Issue 226 R1: the operator wants the conversation name on the floor;
+    issue 360: up to 20 characters. Gateway characters keep their exact
+    fixed names; untitled sessions keep the deterministic fallback.
     """
     sid = str(session_id or "")
     for key, fixed in GATEWAY_NAMES.items():
         if key in sid:
             return fixed
-    title = _first10(display_name)
+    title = _first20(display_name)
     if title.strip():
         return title
     m = _RUN_ID_RE.match(sid)
     if m:
-        return f"Run {m.group(1)} {m.group(2).title()}"[:24]
+        return f"Run {m.group(1)} {m.group(2).title()}"[:20]
     if sid.startswith("oc-"):
         return "OpenChamber " + sid[-4:]
     return sid[:16] or "Agent"
 
 
 def office_subagent_name(session_id: str, display_name: str | None) -> str:
-    """Subagent character name: 'sub-' + first 10 of the conversation name."""
-    base = office_session_name(session_id, display_name)
-    return f"sub-{base}"[:24]
+    """Subagent character name: 'sub_' + conversation name, max 20 chars."""
+    base = _first20(display_name)
+    if not base.strip():
+        base = office_session_name(session_id, None)
+    return ("sub_" + base.strip())[:20]
+
+
+def office_title(display_name: str | None) -> str | None:
+    """Full conversation name for the floor label (issue 360)."""
+    title = str(display_name or "").strip()
+    return title[:80] or None
 
 
 _TEAMMATE_COLORS = [
@@ -270,9 +289,11 @@ class RoomOrchestrator:
                     name = agent.name
                     title = (entry.sm.display_name or "").strip()
                     if not is_gateway and title:
-                        # Issue 226 R1: with a real conversation title the
-                        # operator wants "sub-<first 10 chars>"; without one we
-                        # keep the agent's own (curated) name.
+                        # Issue 360: with a real conversation title the
+                        # operator wants "sub_<conversation>" (max 20 chars);
+                        # without one we keep the agent's own (curated) name.
+                        # The full conversation name rides along as `title`
+                        # for the floor label.
                         name = office_subagent_name(session_id, title)
                     present.append(
                         (
@@ -282,6 +303,9 @@ class RoomOrchestrator:
                                     "character_type": "subagent",
                                     "parent_session_id": session_id,
                                     "name": name,
+                                    "title": office_title(
+                                        entry.sm.display_name
+                                    ),
                                 }
                             ),
                         )
@@ -295,6 +319,12 @@ class RoomOrchestrator:
                             name=office_session_name(
                                 session_id, entry.sm.display_name
                             ),
+                            # Placeholder colour: the seat/colour pass below
+                            # assigns the stable per-desk teammate colour.
+                            # Agent.color is a required field, so it must be
+                            # supplied here (issue 246 regression: dropping it
+                            # raised on every office merge -> WS DISCONNECTED).
+                            color=_TEAMMATE_COLORS[0],
                             number=0,
                             state=_BOSS_TO_AGENT.get(
                                 state.boss.state, AgentState.WORKING
@@ -302,6 +332,7 @@ class RoomOrchestrator:
                             desk=0,
                             bubble=state.boss.bubble,
                             current_task=state.boss.current_task,
+                            title=office_title(entry.sm.display_name),
                             character_type="teammate",
                             parent_session_id=session_id,
                         ),
@@ -317,7 +348,14 @@ class RoomOrchestrator:
             if key in kept:
                 continue
             free = next(
-                (d for d in range(1, OFFICE_MAX_SEATED + 1) if d not in used), None
+                (
+                    d
+                    for d in range(
+                        1, OFFICE_MAX_SEATED + OFFICE_OVERFLOW_SPOTS + 1
+                    )
+                    if d not in used
+                ),
+                None,
             )
             if free is None:
                 continue  # floor full - the character stays off the floor
@@ -336,7 +374,10 @@ class RoomOrchestrator:
                 update["color"] = _TEAMMATE_COLORS[(desk - 1) % len(_TEAMMATE_COLORS)]
             merged_agents.append(agent.model_copy(update=update))
 
-        desk_count = max(8, len(merged_agents) + 2)
+        # Persistent desk layout (operator): the desk set comes from the saved
+        # layout on the frontend, so report a STABLE count - never grow the
+        # floor when more agents arrive.
+        desk_count = OFFICE_DESK_COUNT
         return GameState(
             session_id=OFFICE_ROOM_ID,
             floor_id=first_entry.sm.floor_id,

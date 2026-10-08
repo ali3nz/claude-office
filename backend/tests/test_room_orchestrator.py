@@ -1,7 +1,15 @@
 # backend/tests/test_room_orchestrator.py
 """Tests for RoomOrchestrator: session merging, character types, kanban aggregation."""
 
-from app.core.room_orchestrator import RoomOrchestrator, build_overview
+from app.core.room_orchestrator import (
+    OFFICE_MAX_SEATED,
+    OFFICE_OVERFLOW_SPOTS,
+    RoomOrchestrator,
+    build_overview,
+    office_session_name,
+    office_subagent_name,
+    office_title,
+)
 from app.core.state_machine import StateMachine
 from app.models.agents import Agent, AgentState, BossState
 from app.models.common import TodoItem, TodoStatus
@@ -125,6 +133,28 @@ class TestTeamMerge:
         assert tm_sub is not None
         assert tm_sub.character_type == "subagent"
         assert tm_sub.parent_id is not None
+
+
+class TestOfficeMergeAgentlessSession:
+    """Regression (issue 246 follow-up): an agent-less session must not crash
+    the office room merge.
+
+    The synthetic session-level character built in ``_merge_office`` needs the
+    required ``color`` field; omitting it raised a pydantic ValidationError on
+    every merge, which killed the room WebSocket (browser showed DISCONNECTED
+    with no worker information).
+    """
+
+    def test_office_merge_with_agentless_session(self) -> None:
+        orch = RoomOrchestrator("office")
+        orch.add_session("oc-ses_agentless", _make_sm())
+
+        state = orch.merge()
+        assert state is not None
+        assert state.session_id == "office"
+        teammates = [a for a in state.agents if a.character_type == "teammate"]
+        assert len(teammates) == 1
+        assert teammates[0].color  # required field must be populated
 
 
 class TestKanbanAggregation:
@@ -256,3 +286,66 @@ class TestBuildOverview:
         assert entry.current_task == "refactor auth"
         assert (entry.todo_done, entry.todo_total) == (1, 3)
         assert entry.subagent_count == 2
+
+
+class TestOfficeNaming360:
+    """Issue 360: 20-char floor names, sub_ prefix, conversation titles."""
+
+    def test_session_name_uses_20_chars(self) -> None:
+        assert (
+            office_session_name("oc-ses_x", "A very long conversation name here")
+            == "A very long conversa"
+        )
+
+    def test_subagent_name_has_sub_prefix(self) -> None:
+        name = office_subagent_name("oc-ses_x", "My conversation")
+        assert name == "sub_My conversation"
+        assert len(name) <= 20
+
+    def test_subagent_name_truncates_to_20(self) -> None:
+        name = office_subagent_name("oc-ses_x", "A very long conversation name")
+        assert name.startswith("sub_")
+        assert len(name) == 20
+
+    def test_subagent_name_falls_back_without_title(self) -> None:
+        name = office_subagent_name("oc-ses_x", None)
+        assert name.startswith("sub_")
+        assert len(name) <= 20
+
+    def test_office_title_is_full_name(self) -> None:
+        assert office_title("  My conversation  ") == "My conversation"
+        assert office_title(None) is None
+        assert office_title("   ") is None
+
+    def test_merge_carries_title(self) -> None:
+        orch = RoomOrchestrator("office")
+        sm = _make_sm()
+        sm.display_name = "Fix the dashboard bug"
+        sm.agents = {
+            "w": Agent(
+                id="w", color="#fff", number=0, state=AgentState.WORKING
+            )
+        }
+        orch.add_session("oc-ses_titled", sm)
+        state = orch.merge()
+        assert state is not None
+        sub = next(a for a in state.agents if a.character_type == "subagent")
+        assert sub.name == "sub_Fix the dashboar"
+        assert sub.title == "Fix the dashboard bug"
+
+    def test_overflow_seats_beyond_ten(self) -> None:
+        orch = RoomOrchestrator("office")
+        for i in range(OFFICE_MAX_SEATED + 2):
+            sm = _make_sm()
+            sm.agents = {
+                f"w{i}": Agent(
+                    id=f"w{i}", color="#fff", number=0, state=AgentState.WORKING
+                )
+            }
+            orch.add_session(f"oc-ses_{i:02d}", sm)
+        state = orch.merge()
+        assert state is not None
+        desks = sorted(a.desk for a in state.agents if a.desk)
+        assert OFFICE_MAX_SEATED + 1 in desks
+        assert OFFICE_MAX_SEATED + 2 in desks
+        assert max(desks) <= OFFICE_MAX_SEATED + OFFICE_OVERFLOW_SPOTS

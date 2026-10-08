@@ -58,13 +58,19 @@ import { wireGameRuntime, unwireGameRuntime } from "@/systems/gameRuntime";
 import { useCompactionAnimation } from "@/systems/compactionAnimation";
 import { useOfficeTextures } from "@/hooks/useOfficeTextures";
 import {
-  getSpotForDesk,
   seatDeskFor,
   SEAT_FACINGS,
   COFFEE_SPOT,
   WATER_SPOT,
   PINNED_SEATS,
 } from "@/themes/w17ant-spots";
+import {
+  useDeskSeats,
+  getDeskSeat,
+  setDeskSeatSnapshot,
+  assignDeskSeats,
+  overflowSeatCount,
+} from "@/systems/deskSeats";
 import { setBehavior, tickBehaviors, getOffset } from "@/systems/officeBehavior";
 import type { AgentAnimationState } from "@/stores/slices/types";
 import {
@@ -345,8 +351,9 @@ function agentDisplayPosition(agent: {
   }
   const deskNum = deskAssignmentCache.get(agent.id) ?? agent.desk;
   if (deskNum) {
-    const seat = getSpotForDesk(deskNum).position;
-    return { x: seat.x, y: seat.y + STAND_DESK_FORWARD };
+    const seat = getDeskSeat(deskNum);
+    // Overflow arrivals stand (no desk), so no forward offset.
+    return { x: seat.x, y: seat.y + (seat.desk ? STAND_DESK_FORWARD : 0) };
   }
   return agent.currentPosition;
 }
@@ -395,7 +402,6 @@ const ALWAYS_PRESENT = new Set([
   "Sol Docker",
   "Sol Webserver",
   "GhostReporting",
-  "TruFreedom",
 ]);
 
 function isRecentlyActive(
@@ -405,8 +411,8 @@ function isRecentlyActive(
   if (agent.name && ALWAYS_PRESENT.has(agent.name)) return true;
   // Issue 226 R6h: robust persistent-identity detection - the ai-agents and
   // the two gateway sessions never leave the floor even when their feed goes
-  // quiet (TruFreedom went missing because only the display name was checked).
-  // SOL review: enumerate the four persistent IDs exactly; an `ai-` prefix
+  // quiet (a missing identity once went missing because only the display name was checked).
+  // SOL review: enumerate the three persistent IDs exactly; an `ai-` prefix
   // would make any future ai-* agent permanently immune to the idle sweep.
   if (PERSISTENT_IDS.has(agent.id ?? "")) return true;
   if (!agent.lastActivityAt) return true;
@@ -424,6 +430,9 @@ let deskAssignmentCache = new Map<string, number>();
 /** Dedicated corner seat per Sol gateway character (issue 226 R5). */
 const SOL_SEATS: Record<string, { x: number; y: number }> = PINNED_SEATS;
 
+/** Display names of the three pinned identities (never take a pool seat). */
+const PINNED_NAME_SET: ReadonlySet<string> = new Set(Object.keys(PINNED_SEATS));
+
 /**
  * Issue 226 R7 (operator: "true freedom is there ghost is gone"): the backend
  * room drops a session between event bursts, so the two ai- identities (and
@@ -438,7 +447,7 @@ const persistentIdentityCache = new Map<string, AgentAnimationState>();
 
 /**
  * Issue 226 R7b (operator: "always on ... same desk ... same avatar every
- * time"): the four persistent identities are SEEDED here so they render from
+ * time"): the three persistent identities are SEEDED here so they render from
  * the very first frame of a cold load, before any feed event arrives. The ids
  * are the backend's stable agent ids, so the deterministic avatar hash gives
  * exactly the same character as the live state does; the pinned seat map
@@ -448,7 +457,6 @@ const PERSISTENT_SEEDS: { name: string; id: string }[] = [
   { name: "Sol Docker", id: "gateway-dockerhost" },
   { name: "Sol Webserver", id: "gateway-webserver" },
   { name: "GhostReporting", id: "ai-companion" },
-  { name: "TruFreedom", id: "ai-explorer" },
 ];
 
 function makePersistentSeed(
@@ -464,6 +472,7 @@ function makePersistentSeed(
     desk: null,
     backendState: "idle",
     currentTask: null,
+    title: null,
     characterType: null,
     parentSessionId: null,
     parentId: null,
@@ -491,6 +500,7 @@ function seedPersistentIdentities(): void {
       desk: null,
       backendState: "idle",
       currentTask: null,
+      title: null,
       characterType: null,
       parentSessionId: null,
       parentId: null,
@@ -526,14 +536,15 @@ function seatFacingFor(agent: {
   if (agent.name === "Sol Docker") return "rear-right";
   if (agent.name === "Sol Webserver") return "rear-left";
   if (agent.name === "GhostReporting") return "rear-right";
-  if (agent.name === "TruFreedom") return "rear-left";
   const deskNum = deskAssignmentCache.get(agent.id) ?? agent.desk;
   if (deskNum) {
+    const seat = getDeskSeat(deskNum);
+    // Overflow arrivals stand free (no desk): face the room/camera.
+    if (!seat.desk) return seat.x < 640 ? "front-left" : "front-right";
     // Issue 226 R6f: the desk now renders AT the seat (see DeskCluster), so
     // the monitor is directly in front of the character (up-screen). Looking
     // at it means the REAR sprites, angled toward the room centre so the pair
     // reads correctly from the default camera.
-    const seat = getSpotForDesk(deskNum).position;
     return seat.x < 640 ? "rear-right" : "rear-left";
   }
   return undefined;
@@ -968,32 +979,24 @@ export function OfficeGame(): ReactNode {
     );
     }, [agents, idleTick]);
 
-  // Issue 226 R5 (operator): render only OCCUPIED desks, and only the desks
-  // belonging to pinned identities that are actually on the floor.
-  const deskAssignments = useMemo(() => {
-    const used = new Set<number>();
-    const map = new Map<string, number>();
-    const freeDesk = (): number | null => {
-      for (let n = 1; n <= 10; n++) if (!used.has(n)) return n;
-      return null;
-    };
-    for (const a of visibleAgents) {
-      if (a.name && PINNED_SEATS[a.name]) continue; // pinned: own desk/seat
-      if (a.desk && !used.has(a.desk)) {
-        used.add(a.desk);
-        map.set(a.id, a.desk);
-      }
-    }
-    for (const a of visibleAgents) {
-      if (map.has(a.id) || (a.name && PINNED_SEATS[a.name])) continue;
-      const n = freeDesk();
-      if (n !== null) {
-        used.add(n);
-        map.set(a.id, n);
-      }
-    }
-    return map;
-  }, [visibleAgents]);
+  // Desk/seat pool from the SAVED layout (persistent desk layout). Publish it
+  // for the movement engine (getDeskPosition) which reads the module snapshot.
+  const deskSeats = useDeskSeats();
+  setDeskSeatSnapshot(deskSeats);
+
+  // Seat every non-pinned agent on the fixed pool; extra agents STAND at
+  // the overflow spots (never spawn a desk, never double up a desk).
+  // Pinned identities keep their own fixed seats.
+  const deskAssignments = useMemo(
+    () =>
+      assignDeskSeats(
+        visibleAgents,
+        PINNED_NAME_SET,
+        deskSeats.length,
+        overflowSeatCount(),
+      ),
+    [visibleAgents, deskSeats],
+  );
   deskAssignmentCache = deskAssignments;
   const occupiedDeskNumbers = useMemo(
     () => new Set<number>(deskAssignments.values()),
@@ -1249,7 +1252,13 @@ export function OfficeGame(): ReactNode {
                     {W17ANT_CAST_MODE && (
                       <>
                         <OfficeDecor />
-                        <DeskCluster occupied={occupiedDeskNumbers} />
+                        {/* Operator absolute (issue 360): no code-rendered
+                            base desks in normal view, ever. Agents sit at the
+                            Ben seat anchors; overflow stands. Desks render
+                            ONLY in edit mode as drag handles for arranging. */}
+                        {isEditMode && (
+                          <DeskCluster occupied={occupiedDeskNumbers} />
+                        )}
                         {/* Issue 226 R5: boss + pinned desks live INSIDE the
                             y-sorted layer (they used to render after it, so
                             they drew over their own occupants). */}
@@ -1434,6 +1443,7 @@ export function OfficeGame(): ReactNode {
                       >
                         <AgentLabel
                           name={agent.name!}
+                          conversation={agent.title ?? null}
                           position={{ x: 0, y: 0 }}
                           glyph={agentStateGlyph(agent)}
                           task={
