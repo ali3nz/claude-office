@@ -11,7 +11,11 @@
 
 import { type ReactNode } from "react";
 import { type Texture } from "pixi.js";
-import { useOfficeEditStore } from "@/stores/officeEditStore";
+import {
+  useOfficeEditStore,
+  clampEntityScale,
+  clampEntityTilt,
+} from "@/stores/officeEditStore";
 import { useEditDrag } from "./useEditDrag";
 
 export interface EditableSpriteProps {
@@ -50,6 +54,18 @@ export function EditableSprite({
   const x = override?.x ?? defaultX;
   const y = override?.y ?? defaultY;
 
+  // Operator size + wall-matching slant (issue 361). Inserted entities carry
+  // their own values; built-ins read the override layer.
+  const insertedScale = useOfficeEditStore(
+    (s) => s.insertedEntities.find((e) => e.id === id)?.scale,
+  );
+  const insertedTilt = useOfficeEditStore(
+    (s) => s.insertedEntities.find((e) => e.id === id)?.tilt,
+  );
+  const scale = clampEntityScale(insertedScale ?? override?.scale ?? 1);
+  const tiltDeg = clampEntityTilt(insertedTilt ?? override?.tilt ?? 0);
+  const skewX = Math.tan((tiltDeg * Math.PI) / 180);
+
   const { onPointerDown, isDragging } = useEditDrag(id, x, y);
 
   const zIndex = y + zBias;
@@ -57,9 +73,11 @@ export function EditableSprite({
   // Deleted by the operator (Reset restores) - hooks above stay unconditional.
   if (override?.hidden) return null;
 
-  // Selection box padding
+  // Selection box padding (follows the operator size)
   const pad = 6;
-  const halfW = width / 2;
+  const scaledW = width * scale;
+  const scaledH = height * scale;
+  const halfW = scaledW / 2;
 
   return (
     <pixiContainer
@@ -70,11 +88,14 @@ export function EditableSprite({
       cursor={isEditMode ? (isDragging ? "grabbing" : "grab") : "default"}
       onPointerDown={isEditMode ? onPointerDown : undefined}
     >
-      {/* Inner container centered at sprite visual centre; flip mirrors the facing */}
+      {/* Inner container centered at sprite visual centre; flip mirrors
+          the facing, scale applies the operator size, skew slants the image
+          to match the isometric walls (issue 361) */}
       <pixiContainer
         x={0}
-        y={-height / 2}
-        scale={{ x: flip ? -1 : 1, y: 1 }}
+        y={-scaledH / 2}
+        scale={{ x: flip ? -scale : scale, y: scale }}
+        skew={{ x: skewX, y: 0 }}
       >
         {texture && (
           <pixiSprite
@@ -94,9 +115,9 @@ export function EditableSprite({
             draw={(g) => {
               g.clear();
               const bx = -halfW - pad;
-              const by = -height / 2 - pad;
-              const bw = width + pad * 2;
-              const bh = height + pad * 2;
+              const by = -scaledH / 2 - pad;
+              const bw = scaledW + pad * 2;
+              const bh = scaledH + pad * 2;
 
               // High-visibility cyan/sky selection border
               g.roundRect(bx, by, bw, bh, 3);
@@ -120,6 +141,22 @@ export function EditableSprite({
       </pixiContainer>
     </pixiContainer>
   );
+}
+
+/** Operator size multiplier for an object (issue 361). */
+export function useEntityScale(id: string, fallback = 1): number {
+  return useOfficeEditStore((s) => {
+    const inserted = s.insertedEntities.find((e) => e.id === id);
+    return clampEntityScale(inserted?.scale ?? s.overrides[id]?.scale ?? fallback);
+  });
+}
+
+/** Operator wall-matching slant in degrees for an object (issue 361). */
+export function useEntityTilt(id: string, fallback = 0): number {
+  return useOfficeEditStore((s) => {
+    const inserted = s.insertedEntities.find((e) => e.id === id);
+    return clampEntityTilt(inserted?.tilt ?? s.overrides[id]?.tilt ?? fallback);
+  });
 }
 
 /** Facing steps the operator applied to an object (see systems/facingCycle). */

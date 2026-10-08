@@ -25,6 +25,10 @@ export interface EntityOverride {
   hidden?: boolean;
   /** Cast avatar slug chosen by the operator (agents only). */
   avatar?: string;
+  /** Size multiplier chosen by the operator (issue 361). */
+  scale?: number;
+  /** Wall-matching slant in degrees, + slants right (issue 361). */
+  tilt?: number;
 }
 
 export interface InsertedSprite {
@@ -35,6 +39,29 @@ export interface InsertedSprite {
   y: number;
   /** Facing steps (see systems/facingCycle). */
   turn?: number;
+  /** Size multiplier chosen by the operator (issue 361). */
+  scale?: number;
+  /** Wall-matching slant in degrees, + slants right (issue 361). */
+  tilt?: number;
+}
+
+/** Bounds for operator resizing/tilting (issue 361). */
+export const MIN_ENTITY_SCALE = 0.25;
+export const MAX_ENTITY_SCALE = 2;
+export const ENTITY_SCALE_STEP = 0.1;
+export const MAX_ENTITY_TILT = 30;
+export const ENTITY_TILT_STEP = 5;
+
+/** Clamp a size multiplier into the operator range (NaN-safe). */
+export function clampEntityScale(s: number): number {
+  if (!Number.isFinite(s)) return 1;
+  return Math.min(MAX_ENTITY_SCALE, Math.max(MIN_ENTITY_SCALE, s));
+}
+
+/** Clamp a slant angle in degrees into the operator range (NaN-safe). */
+export function clampEntityTilt(t: number): number {
+  if (!Number.isFinite(t)) return 0;
+  return Math.min(MAX_ENTITY_TILT, Math.max(-MAX_ENTITY_TILT, t));
 }
 
 const STORAGE_KEY_EDIT_MODE = "claude-office-edit-mode";
@@ -191,6 +218,10 @@ interface OfficeEditState {
   setPaletteOpen: (open: boolean) => void;
   updateEntityPosition: (id: string, x: number, y: number, commit?: boolean) => void;
   rotateEntity: (id: string) => void;
+  /** Grow/shrink the selected entity (dir +1/-1); persisted (issue 361). */
+  resizeEntity: (id: string, dir: 1 | -1) => void;
+  /** Slant the selected entity to match the walls (issue 361). */
+  tiltEntity: (id: string, dir: 1 | -1) => void;
   /** Delete any object: inserted sprites are removed, built-ins are hidden. */
   deleteEntity: (id: string) => void;
   setAvatar: (id: string, slug: string) => void;
@@ -279,6 +310,69 @@ export const useOfficeEditStore = create<OfficeEditState>((set, get) => ({
       const updatedOverrides = {
         ...state.overrides,
         [id]: { ...current, turn: ((current?.turn ?? 0) + 1) % 20 },
+      };
+      saveOverrides(updatedOverrides);
+      return { overrides: updatedOverrides };
+    });
+  },
+
+  resizeEntity: (id: string, dir: 1 | -1) => {
+    const round2 = (v: number): number => Math.round(v * 100) / 100;
+    set((state) => {
+      // Check if inserted entity
+      const insertedIndex = state.insertedEntities.findIndex((e) => e.id === id);
+      if (insertedIndex !== -1) {
+        const updatedInserted = [...state.insertedEntities];
+        const item = updatedInserted[insertedIndex];
+        updatedInserted[insertedIndex] = {
+          ...item,
+          scale: round2(
+            clampEntityScale((item.scale ?? 1) + dir * ENTITY_SCALE_STEP),
+          ),
+        };
+        saveInserted(updatedInserted);
+        return { insertedEntities: updatedInserted };
+      }
+
+      // Existing entity override
+      const current = state.overrides[id];
+      const updatedOverrides = {
+        ...state.overrides,
+        [id]: {
+          ...current,
+          scale: round2(
+            clampEntityScale((current?.scale ?? 1) + dir * ENTITY_SCALE_STEP),
+          ),
+        },
+      };
+      saveOverrides(updatedOverrides);
+      return { overrides: updatedOverrides };
+    });
+  },
+
+  tiltEntity: (id: string, dir: 1 | -1) => {
+    set((state) => {
+      // Check if inserted entity
+      const insertedIndex = state.insertedEntities.findIndex((e) => e.id === id);
+      if (insertedIndex !== -1) {
+        const updatedInserted = [...state.insertedEntities];
+        const item = updatedInserted[insertedIndex];
+        updatedInserted[insertedIndex] = {
+          ...item,
+          tilt: clampEntityTilt((item.tilt ?? 0) + dir * ENTITY_TILT_STEP),
+        };
+        saveInserted(updatedInserted);
+        return { insertedEntities: updatedInserted };
+      }
+
+      // Existing entity override
+      const current = state.overrides[id];
+      const updatedOverrides = {
+        ...state.overrides,
+        [id]: {
+          ...current,
+          tilt: clampEntityTilt((current?.tilt ?? 0) + dir * ENTITY_TILT_STEP),
+        },
       };
       saveOverrides(updatedOverrides);
       return { overrides: updatedOverrides };

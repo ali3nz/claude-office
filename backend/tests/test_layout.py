@@ -124,6 +124,49 @@ def test_named_layout_rejects_positions_outside_editor_bounds() -> None:
         assert response.status_code == 422, (collection, coordinate, value)
 
 
+def test_named_layout_accepts_scale_and_tilt() -> None:
+    """Issue 361: size and wall-matching slant persist in snapshots."""
+    snapshot = _snapshot()
+    snapshot["overrides"] = {"desk-1": {"x": 400, "y": 300, "scale": 0.5, "tilt": -12}}
+    sprite = dict(snapshot["inserted"][0])
+    sprite["scale"] = 1.5
+    sprite["tilt"] = 10
+    snapshot["inserted"] = [sprite]
+    response = client.put(
+        f"/api/v1/layout/saved/layout-{uuid4().hex[:12]}",
+        json=snapshot,
+        headers=_headers(),
+    )
+    assert response.status_code == 200, response.text
+
+
+def test_named_layout_rejects_scale_and_tilt_out_of_range() -> None:
+    invalid_values = (
+        ("overrides", "scale", 0.1),
+        ("overrides", "scale", 2.5),
+        ("overrides", "tilt", -31),
+        ("overrides", "tilt", 31),
+        ("inserted", "scale", 0.1),
+        ("inserted", "scale", 2.5),
+        ("inserted", "tilt", -31),
+        ("inserted", "tilt", 31),
+    )
+    for collection, field, value in invalid_values:
+        snapshot = _snapshot()
+        if collection == "overrides":
+            snapshot["overrides"] = {"desk-1": {"x": 400, "y": 300, field: value}}
+        else:
+            sprite = dict(snapshot["inserted"][0])
+            sprite[field] = value
+            snapshot["inserted"] = [sprite]
+        response = client.put(
+            f"/api/v1/layout/saved/layout-{uuid4().hex[:12]}",
+            json=snapshot,
+            headers=_headers(),
+        )
+        assert response.status_code == 422, (collection, field, value)
+
+
 def test_named_layout_rejects_invalid_names_and_payloads() -> None:
     assert (
         client.put(

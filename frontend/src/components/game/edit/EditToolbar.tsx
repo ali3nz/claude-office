@@ -20,6 +20,9 @@ import {
   X,
   Sparkles,
   Check,
+  ZoomIn,
+  ZoomOut,
+  Minus,
 } from "lucide-react";
 import { useOfficeEditStore, avatarIds } from "@/stores/officeEditStore";
 import { useGameStore, selectAgents } from "@/stores/gameStore";
@@ -35,6 +38,8 @@ export function EditToolbar() {
   const selectedEntityId = useOfficeEditStore((s) => s.selectedEntityId);
   const selectEntity = useOfficeEditStore((s) => s.selectEntity);
   const rotateEntity = useOfficeEditStore((s) => s.rotateEntity);
+  const resizeEntity = useOfficeEditStore((s) => s.resizeEntity);
+  const tiltEntity = useOfficeEditStore((s) => s.tiltEntity);
   const agentsMap = useGameStore(selectAgents);
   const setAvatar = useOfficeEditStore((s) => s.setAvatar);
   const avatarValue = useOfficeEditStore((s) =>
@@ -164,6 +169,42 @@ export function EditToolbar() {
           <span className="text-[11px] text-slate-400 px-1 max-w-[120px] truncate">
             {displayName}
           </span>
+
+          {/* Size Buttons (issue 361): shrink/grow the selection */}
+          <button
+            onClick={() => resizeEntity(selectedEntityId!, -1)}
+            className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-700 hover:bg-slate-600 text-white font-bold rounded-lg shadow transition-colors active:scale-95"
+            title="Shrink (smaller)"
+          >
+            <ZoomOut size={13} />
+            <span>Size-</span>
+          </button>
+          <button
+            onClick={() => resizeEntity(selectedEntityId!, 1)}
+            className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-700 hover:bg-slate-600 text-white font-bold rounded-lg shadow transition-colors active:scale-95"
+            title="Enlarge (bigger)"
+          >
+            <ZoomIn size={13} />
+            <span>Size+</span>
+          </button>
+
+          {/* Tilt Buttons (issue 361): slant to match the room walls */}
+          <button
+            onClick={() => tiltEntity(selectedEntityId!, -1)}
+            className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-700 hover:bg-slate-600 text-white font-bold rounded-lg shadow transition-colors active:scale-95"
+            title="Slant left to match the wall angle"
+          >
+            <Minus size={13} />
+            <span>Tilt-</span>
+          </button>
+          <button
+            onClick={() => tiltEntity(selectedEntityId!, 1)}
+            className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-700 hover:bg-slate-600 text-white font-bold rounded-lg shadow transition-colors active:scale-95"
+            title="Slant right to match the wall angle"
+          >
+            <Plus size={13} />
+            <span>Tilt+</span>
+          </button>
 
           {/* Rotate Button (Requirement 2) */}
           <button

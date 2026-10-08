@@ -42,6 +42,8 @@ class EntityOverrideBody(BaseModel):
     turn: int | None = Field(default=None, ge=0, le=19)
     hidden: bool | None = None
     avatar: str | None = Field(default=None, max_length=128)
+    scale: float | None = Field(default=None, ge=0.25, le=2, allow_inf_nan=False)
+    tilt: float | None = Field(default=None, ge=-30, le=30, allow_inf_nan=False)
 
 
 class InsertedSpriteBody(BaseModel):
@@ -55,6 +57,8 @@ class InsertedSpriteBody(BaseModel):
     x: float = Field(ge=20, le=1260, allow_inf_nan=False)
     y: float = Field(ge=20, le=1004, allow_inf_nan=False)
     turn: int | None = Field(default=None, ge=0, le=19)
+    scale: float | None = Field(default=None, ge=0.25, le=2, allow_inf_nan=False)
+    tilt: float | None = Field(default=None, ge=-30, le=30, allow_inf_nan=False)
 
     @field_validator("sprite_path")
     @classmethod
