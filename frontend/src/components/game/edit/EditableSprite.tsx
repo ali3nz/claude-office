@@ -64,7 +64,8 @@ export function EditableSprite({
   );
   const scale = clampEntityScale(insertedScale ?? override?.scale ?? 1);
   const tiltDeg = clampEntityTilt(insertedTilt ?? override?.tilt ?? 0);
-  const skewX = Math.tan((tiltDeg * Math.PI) / 180);
+  // Pixi's skew.y slopes horizontal edges; skew.x only leans vertical sides.
+  const wallAngle = (tiltDeg * Math.PI) / 180;
 
   const { onPointerDown, isDragging } = useEditDrag(id, x, y);
 
@@ -95,7 +96,7 @@ export function EditableSprite({
         x={0}
         y={-scaledH / 2}
         scale={{ x: flip ? -scale : scale, y: scale }}
-        skew={{ x: skewX, y: 0 }}
+        skew={{ x: 0, y: wallAngle }}
       >
         {texture && (
           <pixiSprite
