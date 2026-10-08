@@ -75,6 +75,13 @@ describe("deskSeats — layout-driven desk pool", () => {
     // Overflow cycles instead of inventing seats.
     expect(getDeskSeat(n + overflowSeatCount() + 1).id).toBe("overflow-1");
   });
+
+  it("fills placed desks before bare base anchors", () => {
+    const seats = buildDeskSeats({}, [standingDesk("inserted-1", 913, 826)]);
+    expect(seats[0].id).toBe("inserted-1");
+    expect(seats[0].desk).toBe(true);
+    expect(seats.slice(1).every((s) => s.base)).toBe(true);
+  });
 });
 
 describe("assignDeskSeats", () => {

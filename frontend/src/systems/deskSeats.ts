@@ -66,34 +66,19 @@ export function deskKindFromPath(path: string): DeskSpriteKind {
 
 /**
  * Build the desk/seat pool from the persisted layout overrides + inserts.
- * Order is deterministic: the ten authored desks first (skipping hidden
- * ones), then operator-inserted desks in insertion order.
+ * Order is deterministic (operator: visible desks fill first): the
+ * operator-inserted desks first (in insertion order), then the authored
+ * base anchors (skipping hidden ones). Base anchors have no furniture in
+ * normal view; they are bare standing spots at the arranged positions.
  */
 export function buildDeskSeats(
   overrides: Record<string, EntityOverride>,
   inserted: readonly InsertedSprite[],
 ): DeskSeat[] {
-  const seats: DeskSeat[] = [];
-
-  for (let i = 0; i < DESK_SPOTS.length; i++) {
-    const id = `desk-${i + 1}`;
-    if (overrides[id]?.hidden) continue; // operator removed this workstation
-    const spot = DESK_SPOTS[i];
-    const paired = DESKS[SEAT_TO_DESK_INDEX[i]] ?? DESKS[i] ?? DESKS[0];
-    const ov = overrides[id];
-    seats.push({
-      id,
-      x: ov?.x ?? spot.position.x,
-      y: ov?.y ?? spot.position.y,
-      kind: paired.kind,
-      base: true,
-      desk: true,
-    });
-  }
-
+  const placed: DeskSeat[] = [];
   for (const e of inserted) {
     if (!isDeskSpritePath(e.spritePath)) continue;
-    seats.push({
+    placed.push({
       id: e.id,
       x: e.x,
       y: e.y,
@@ -103,7 +88,24 @@ export function buildDeskSeats(
     });
   }
 
-  return seats;
+  const anchors: DeskSeat[] = [];
+  for (let i = 0; i < DESK_SPOTS.length; i++) {
+    const id = `desk-${i + 1}`;
+    if (overrides[id]?.hidden) continue; // operator removed this workstation
+    const spot = DESK_SPOTS[i];
+    const paired = DESKS[SEAT_TO_DESK_INDEX[i]] ?? DESKS[i] ?? DESKS[0];
+    const ov = overrides[id];
+    anchors.push({
+      id,
+      x: ov?.x ?? spot.position.x,
+      y: ov?.y ?? spot.position.y,
+      kind: paired.kind,
+      base: true,
+      desk: true,
+    });
+  }
+
+  return [...placed, ...anchors];
 }
 
 /** Standing overflow spots as seats (static; not layout-driven). */

@@ -603,10 +603,17 @@ function AgentLabelComponent({
   });
 
   const taskText = task ? (task.length > 34 ? task.slice(0, 33) + "\u2026" : task) : null;
-  const convoText =
-    conversation && conversation.length > 42
-      ? conversation.slice(0, 41) + "\u2026"
+  // The floor name is already the first 20 chars of the conversation, so
+  // printing the full title would show it twice. Show only the remainder
+  // (nothing at all when the title adds nothing over the name).
+  const convoRemainder =
+    conversation && name && conversation.startsWith(name)
+      ? conversation.slice(name.length).trim()
       : conversation;
+  const convoText =
+    convoRemainder && convoRemainder.length > 42
+      ? convoRemainder.slice(0, 41) + "\u2026"
+      : convoRemainder;
   const chipW = taskText ? Math.min(430, 60 + taskText.length * 12) : 0;
 
   return (
