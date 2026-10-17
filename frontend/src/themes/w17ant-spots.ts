@@ -249,19 +249,19 @@ export const PINNED_DESKS: DeskFurniture[] = [
 ];
 
 /**
- * Standing overflow spots (operator, issue 360): when every workstation is
- * taken, arrivals stand HERE - around the display board open space, next to
- * Bandit, by the pool table, and at TruFreedom's old desk spot - instead of
- * spawning new desks or doubling up. Feet anchors; the operator can drag an
- * overflow agent in edit mode and the position persists in the saved layout.
- * Must match OFFICE_OVERFLOW_SPOTS in
+ * Standing overflow spots (operator, issue 360; repositioned in issue 714):
+ * when every workstation is taken, arrivals stand HERE - open floor beside
+ * the bandit cat, south/east of the pool table, and the west/bottom-centre
+ * open areas - instead of spawning new desks or doubling up. Feet anchors;
+ * the operator can drag an overflow agent in edit mode and the position
+ * persists in the saved layout. Must match OFFICE_OVERFLOW_SPOTS in
  * backend/app/core/room_orchestrator.py.
  */
 export const OVERFLOW_SPOTS: Position[] = [
   { x: 455, y: 612 }, // beside the bandit cat (operator, issue 714)
   { x: 672, y: 655 }, // south of the pool table
-  { x: 862, y: 655 }, // east open floor, below the right couch
-  { x: 905, y: 585 }, // east open floor, south of the right couch
+  { x: 862, y: 655 }, // east open floor
+  { x: 905, y: 585 }, // east open floor, north-east of the previous spot
   { x: 700, y: 858 }, // bottom-centre open floor
   { x: 352, y: 560 }, // west open floor, by the plants
 ];
