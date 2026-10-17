@@ -32,26 +32,20 @@ FEED_OC = os.environ.get("CO_FEED_OC", "/feeds/openchamber.jsonl")
 FEED_FB = os.environ.get("CO_FEED_FB", "/feeds/claude.jsonl")
 FEED_AG = os.environ.get("CO_FEED_AG", "/feeds/agdir/events.jsonl")
 
-# ai-agents stack (issue 226): the operator's two persistent self-learning
-# agents are ALWAYS on the office floor. They have no chat/session source; their
-# displayed cycle is derived read-only from their own state directories.
+# ai-agents stack (issue 226): the operator's persistent self-learning agent
+# is ALWAYS on the office floor. It has no chat/session source; its displayed
+# cycle is derived read-only from its own state directory. Issue 714: the
+# ai-explorer (TruFreedom) entry was removed - no longer a live agent.
 AI_ROOT = os.environ.get("CO_FEED_AI", "/feeds/aidir")
 AI_AGENTS = (
     {
         "sid": "ai-companion",
         "agent_id": "ai-companion",
         "agent_type": "ai-companion",
-        "name": "GhostReporting",
+        # Issue 714 (operator): "Ghost" is now "Ghost Protocol".
+        "name": "Ghost Protocol",
         "root": "companion",
         "mirror": True,
-    },
-    {
-        "sid": "ai-explorer",
-        "agent_id": "ai-explorer",
-        "agent_type": "ai-explorer",
-        "name": "TruFreedom",
-        "root": "explorer",
-        "mirror": False,
     },
 )
 AI_CYCLE_WINDOW_S = 1800  # a cycle counts as active for 30 min after activity

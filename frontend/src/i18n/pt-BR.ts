@@ -306,6 +306,8 @@ const ptBR: Record<TranslationKey, string> = {
   "settings.layoutLoaded": "Layout carregado e compartilhado.",
   "settings.layoutListFailed": "Não foi possível carregar os layouts salvos.",
   "settings.layoutSaveFailed": "Não foi possível salvar este layout.",
+  "settings.layoutNotAuthorized":
+    "Escritório não autorizado neste dispositivo. Abra o escritório uma vez pelo link com token e tente de novo.",
   "settings.layoutLoadFailed": "Não foi possível carregar este layout.",
   "settings.layoutNameRequired": "Digite um nome para o layout.",
   "settings.roomArea": "Sala / Área",

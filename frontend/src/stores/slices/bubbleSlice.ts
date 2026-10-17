@@ -76,10 +76,13 @@ export const createBubbleSlice: StateCreator<GameStore, [], [], BubbleSlice> = (
       const agentBubble = agent.bubble;
       const newAgents = new Map(state.agents);
 
+      // Issue 714: a new bubble IS activity - it must refresh the idle clock
+      // even when the agent's scalar fields are unchanged.
       if (!agentBubble.content) {
         // IMPORTANT: Preserve any existing queued bubbles
         newAgents.set(entityId, {
           ...agent,
+          lastActivityAt: now,
           bubble: {
             content,
             displayStartTime: now,
@@ -89,6 +92,7 @@ export const createBubbleSlice: StateCreator<GameStore, [], [], BubbleSlice> = (
       } else {
         newAgents.set(entityId, {
           ...agent,
+          lastActivityAt: now,
           bubble: {
             ...agentBubble,
             queue: [...agentBubble.queue, content],

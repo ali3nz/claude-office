@@ -71,16 +71,25 @@ export const createAgentSlice: StateCreator<GameStore, [], [], AgentSlice> = (
       const agent = state.agents.get(agentId);
       if (!agent) return state;
       const delta = typeof patch === "function" ? patch(agent) : patch;
-      // Issue 226 R5: only REAL activity refreshes the idle clock. Pure
+      // Issue 226 R5 + 714: only REAL activity refreshes the idle clock. Pure
       // locomotion writes (position/path/phase) must not keep an idle agent
-      // on the floor forever.
+      // on the floor forever - and neither may a room broadcast that merely
+      // repeats unchanged values. The backend re-sends the whole room state on
+      // every event of ANY session, so counting unchanged patches as activity
+      // kept every agent on the floor forever (issue 714: "idle agents are
+      // supposed to disappear after 5 minutes").
       const MOVEMENT_KEYS = new Set([
         "currentPosition",
         "targetPosition",
         "path",
         "phase",
       ]);
-      const isActivity = Object.keys(delta).some((k) => !MOVEMENT_KEYS.has(k));
+      const agentFields = agent as unknown as Record<string, unknown>;
+      const deltaFields = delta as Record<string, unknown>;
+      const isActivity = Object.keys(delta).some(
+        (k) =>
+          !MOVEMENT_KEYS.has(k) && !Object.is(agentFields[k], deltaFields[k]),
+      );
       const newAgents = new Map(state.agents);
       newAgents.set(agentId, {
         ...agent,

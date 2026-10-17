@@ -306,6 +306,8 @@ const es: Record<TranslationKey, string> = {
   "settings.layoutLoaded": "Diseño cargado y compartido.",
   "settings.layoutListFailed": "No se pudieron cargar los diseños guardados.",
   "settings.layoutSaveFailed": "No se pudo guardar este diseño.",
+  "settings.layoutNotAuthorized":
+    "Oficina no autorizada en este dispositivo. Abre la oficina una vez con tu enlace con token y vuelve a intentarlo.",
   "settings.layoutLoadFailed": "No se pudo cargar este diseño.",
   "settings.layoutNameRequired": "Escribe un nombre para el diseño.",
   "settings.roomArea": "Sala / Área",

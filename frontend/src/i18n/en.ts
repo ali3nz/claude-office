@@ -304,6 +304,8 @@ const en = {
   "settings.layoutLoaded": "Layout loaded and shared.",
   "settings.layoutListFailed": "Could not load saved layouts.",
   "settings.layoutSaveFailed": "Could not save this layout.",
+  "settings.layoutNotAuthorized":
+    "Office not authorized on this device. Open the office once from your token link, then try again.",
   "settings.layoutLoadFailed": "Could not load this layout.",
   "settings.layoutNameRequired": "Enter a layout name.",
   "settings.roomArea": "Room / Area",

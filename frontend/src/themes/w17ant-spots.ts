@@ -222,9 +222,9 @@ export const SEAT_FACINGS: readonly OfficeFacing[] = Array.from(
  */
 /**
  * PERSISTENT identities (operator, issue 226 R5; TruFreedom removed in
- * issue 360 - not a live agent): Sol Docker (Boss), Sol Webserver and
- * GhostReporting each get a FIXED workstation that never changes, and the
- * two Sol characters never move or take breaks.
+ * issue 360, its feed entry removed in issue 714): Sol Docker (Boss), Sol
+ * Webserver and Ghost Protocol each get a FIXED workstation that never
+ * changes, and the two Sol characters never move or take breaks.
  *
  * Seats are feet anchors. Sol Docker sits at the boss desk (front-centre, on
  * the rug); the others get dedicated desks outside the 10-workstation pool so
@@ -239,7 +239,7 @@ export const PINNED_SEATS: Record<string, Position> = {
   // not on the edge").
   "Sol Docker": BOSS_SEAT,
   "Sol Webserver": { x: 1040, y: 700 },
-  "GhostReporting": { x: 288, y: 720 },
+  "Ghost Protocol": { x: 288, y: 720 },
 };
 
 /** Dedicated desks for the pinned seats (the boss desk already exists). */
@@ -258,12 +258,12 @@ export const PINNED_DESKS: DeskFurniture[] = [
  * backend/app/core/room_orchestrator.py.
  */
 export const OVERFLOW_SPOTS: Position[] = [
-  { x: 830, y: 850 }, // TruFreedom's old desk spot
-  { x: 560, y: 770 }, // display board front
-  { x: 650, y: 790 }, // display board front-right
-  { x: 470, y: 640 }, // west of pool table (Bandit side)
-  { x: 700, y: 650 }, // south of pool table
-  { x: 400, y: 780 }, // west open floor
+  { x: 455, y: 612 }, // beside the bandit cat (operator, issue 714)
+  { x: 672, y: 655 }, // south of the pool table
+  { x: 862, y: 655 }, // east open floor, below the right couch
+  { x: 905, y: 585 }, // east open floor, south of the right couch
+  { x: 700, y: 858 }, // bottom-centre open floor
+  { x: 352, y: 560 }, // west open floor, by the plants
 ];
 
 export const BOSS_DESK: DeskFurniture = {

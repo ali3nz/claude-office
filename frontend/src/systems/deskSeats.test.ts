@@ -85,7 +85,7 @@ describe("deskSeats — layout-driven desk pool", () => {
 });
 
 describe("assignDeskSeats", () => {
-  const PINNED = new Set(["Sol Docker", "Sol Webserver", "GhostReporting"]);
+  const PINNED = new Set(["Sol Docker", "Sol Webserver", "Ghost Protocol"]);
 
   it("never lets a pinned identity take a pool seat", () => {
     const map = assignDeskSeats(

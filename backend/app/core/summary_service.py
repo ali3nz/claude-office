@@ -70,8 +70,9 @@ class SummaryService:
         "gateway-dockerhost": ["Sol Docker"],
         "gateway-webserver": ["Sol Webserver"],
         # Persistent self-learning agents (issue 226): fixed identities.
-        "ai-companion": ["GhostReporting"],
-        "ai-explorer": ["TruFreedom"],
+        # Issue 714: "Ghost Protocol" rename; TruFreedom (ai-explorer) removed
+        # - no longer a live agent.
+        "ai-companion": ["Ghost Protocol"],
     }
     _MAPPED_AGENT_TYPES: frozenset[str] = frozenset(_AGENT_TYPE_NAMES.keys())
 

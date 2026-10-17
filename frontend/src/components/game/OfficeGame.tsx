@@ -389,19 +389,20 @@ function agentStateGlyph(agent: {
 }
 
 /**
- * Issue 226 R5 (operator): idle agents leave the floor after 10 minutes
- * without activity ("they can remain idle for only 10 minutes then
- * disappear unless the chat is reactivated"). The two Sol gateway characters
- * are ALWAYS present - they are infrastructure, not sessions.
+ * Issue 226 R5 + 714 (operator: "idle agents are supposed to disappear after
+ * 5 minutes"): idle agents leave the floor after 5 minutes without REAL
+ * activity (issue 714: repeated unchanged room broadcasts no longer count as
+ * activity). The two Sol gateway characters and Ghost Protocol are ALWAYS
+ * present - they are infrastructure, not sessions.
  */
-const IDLE_TIMEOUT_MS = 10 * 60 * 1000;
+const IDLE_TIMEOUT_MS = 5 * 60 * 1000;
 
 /** How far forward of the desk anchor a standing character is drawn. */
 const STAND_DESK_FORWARD = 40;
 const ALWAYS_PRESENT = new Set([
   "Sol Docker",
   "Sol Webserver",
-  "GhostReporting",
+  "Ghost Protocol",
 ]);
 
 function isRecentlyActive(
@@ -456,7 +457,7 @@ const persistentIdentityCache = new Map<string, AgentAnimationState>();
 const PERSISTENT_SEEDS: { name: string; id: string }[] = [
   { name: "Sol Docker", id: "gateway-dockerhost" },
   { name: "Sol Webserver", id: "gateway-webserver" },
-  { name: "GhostReporting", id: "ai-companion" },
+  { name: "Ghost Protocol", id: "ai-companion" },
 ];
 
 function makePersistentSeed(
@@ -535,7 +536,7 @@ function seatFacingFor(agent: {
   // old hardcoded front facings were overriding the desk-facing rule.
   if (agent.name === "Sol Docker") return "rear-right";
   if (agent.name === "Sol Webserver") return "rear-left";
-  if (agent.name === "GhostReporting") return "rear-right";
+  if (agent.name === "Ghost Protocol") return "rear-right";
   const deskNum = deskAssignmentCache.get(agent.id) ?? agent.desk;
   if (deskNum) {
     const seat = getDeskSeat(deskNum);
@@ -959,7 +960,7 @@ export function OfficeGame(): ReactNode {
   if (typeof window !== "undefined" && spritesLoaded) coSet("gate_open", "yes");
   if (typeof window !== "undefined" && spritesLoaded) coMark("gate-render");
 
-  // Issue 226 R5: periodic re-render so agents idle >10 min leave the floor
+  // Issue 226 R5 + 714: periodic re-render so agents idle >5 min leave the floor
   // without needing an unrelated store update to trigger a render.
   const [idleTick, setIdleTick] = useState(() => Date.now());
   useEffect(() => {

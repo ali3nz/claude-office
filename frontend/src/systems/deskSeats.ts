@@ -12,11 +12,11 @@
  *   - every standing-desk sprite the operator inserted from the palette.
  *
  * Seating order (issue 360): agents fill pool seats first; when every desk is
- * taken, further arrivals STAND at the overflow spots (display board open
- * space, Bandit side, pool table, TruFreedom's old desk spot) instead of
- * spawning new desks or doubling up. The three pinned identities (Sol Docker,
- * Sol Webserver, GhostReporting) never enter this pool; they keep fixed seats
- * (see themes/w17ant-spots PINNED_SEATS).
+ * taken, further arrivals STAND at the overflow spots (issue 714: beside the
+ * bandit cat, south/east of the pool table, west and bottom-centre open
+ * floor) instead of spawning new desks or doubling up. The three pinned
+ * identities (Sol Docker, Sol Webserver, Ghost Protocol) never enter this
+ * pool; they keep fixed seats (see themes/w17ant-spots PINNED_SEATS).
  *
  * Seat POSITION feeds the movement engine too (getDeskPosition), so the helper
  * exposes a module snapshot that pure/non-React callers read; React callers use

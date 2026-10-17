@@ -104,10 +104,26 @@ export interface SavedLayoutSummary {
   savedAt: number;
 }
 
+/**
+ * Error carrying the HTTP status so callers can explain failures precisely
+ * (issue 714: a 401 means the browser has no office API key - not a bad
+ * layout).
+ */
+export class LayoutSyncError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+    this.name = "LayoutSyncError";
+  }
+}
+
 /** Read the server-owned list of named layout snapshots. */
 export async function fetchSavedLayouts(): Promise<SavedLayoutSummary[]> {
   const res = await apiFetch(SAVED_LAYOUTS_PATH);
-  if (!res.ok) throw new Error("Could not fetch saved layouts");
+  if (!res.ok)
+    throw new LayoutSyncError("Could not fetch saved layouts", res.status);
   const data = (await res.json()) as { layouts?: SavedLayoutSummary[] };
   return Array.isArray(data.layouts) ? data.layouts : [];
 }
@@ -125,7 +141,7 @@ export async function saveNamedLayout(
       body: JSON.stringify(layout),
     },
   );
-  if (!res.ok) throw new Error("Could not save layout");
+  if (!res.ok) throw new LayoutSyncError("Could not save layout", res.status);
   const data = (await res.json()) as { name?: string };
   return data.name ?? name;
 }
@@ -135,7 +151,7 @@ export async function loadNamedLayout(name: string): Promise<void> {
   const res = await apiFetch(
     `${SAVED_LAYOUTS_PATH}/${encodeURIComponent(name)}`,
   );
-  if (!res.ok) throw new Error("Could not load layout");
+  if (!res.ok) throw new LayoutSyncError("Could not load layout", res.status);
   const data = (await res.json()) as { layout?: SharedLayout | null };
   if (!data.layout) throw new Error("Saved layout is empty");
 

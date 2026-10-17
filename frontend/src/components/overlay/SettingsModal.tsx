@@ -17,6 +17,7 @@ import { BuildingTab } from "@/components/settings/BuildingTab";
 import {
   captureCurrentLayout,
   fetchSavedLayouts,
+  LayoutSyncError,
   loadNamedLayout,
   saveNamedLayout,
   type SavedLayoutSummary,
@@ -36,6 +37,7 @@ type LayoutMessageKey =
   | "settings.layoutListFailed"
   | "settings.layoutSaved"
   | "settings.layoutSaveFailed"
+  | "settings.layoutNotAuthorized"
   | "settings.layoutLoaded"
   | "settings.layoutLoadFailed";
 
@@ -214,8 +216,14 @@ export default function SettingsModal({
       setSelectedLayoutName(savedName);
       await refreshSavedLayouts();
       setLayoutMessage({ key: "settings.layoutSaved", isError: false });
-    } catch {
-      setLayoutMessage({ key: "settings.layoutSaveFailed", isError: true });
+    } catch (error) {
+      setLayoutMessage({
+        key:
+          error instanceof LayoutSyncError && error.status === 401
+            ? "settings.layoutNotAuthorized"
+            : "settings.layoutSaveFailed",
+        isError: true,
+      });
     } finally {
       setLayoutBusy(null);
     }
@@ -228,8 +236,14 @@ export default function SettingsModal({
     try {
       await loadNamedLayout(selectedLayoutName);
       setLayoutMessage({ key: "settings.layoutLoaded", isError: false });
-    } catch {
-      setLayoutMessage({ key: "settings.layoutLoadFailed", isError: true });
+    } catch (error) {
+      setLayoutMessage({
+        key:
+          error instanceof LayoutSyncError && error.status === 401
+            ? "settings.layoutNotAuthorized"
+            : "settings.layoutLoadFailed",
+        isError: true,
+      });
     } finally {
       setLayoutBusy(null);
     }

@@ -24,7 +24,13 @@ export function getApiKey(): string | null {
   return _apiKey;
 }
 
-/** Read ?token= from the URL (stripping it from history) or sessionStorage. */
+/**
+ * Read ?token= from the URL (stripping it from history), then fall back to
+ * the persisted key. Issue 714: the key is stored in localStorage as well as
+ * sessionStorage. sessionStorage alone died with the browser session, so the
+ * operator's office tab silently lost write access (every save 401'd with
+ * "Could not save this layout") and nothing re-delivered the key.
+ */
 export function initApiKeyFromBrowser(): void {
   if (typeof window === "undefined") return;
   const params = new URLSearchParams(window.location.search);
@@ -36,6 +42,11 @@ export function initApiKeyFromBrowser(): void {
     } catch {
       // sessionStorage may be unavailable (private mode); key stays in-memory.
     }
+    try {
+      localStorage.setItem(KEY_STORAGE, token);
+    } catch {
+      // localStorage may be unavailable (private mode); sessionStorage holds it.
+    }
     params.delete("token");
     const qs = params.toString();
     window.history.replaceState(
@@ -46,10 +57,11 @@ export function initApiKeyFromBrowser(): void {
     return;
   }
   try {
-    const stored = sessionStorage.getItem(KEY_STORAGE);
+    const stored =
+      sessionStorage.getItem(KEY_STORAGE) ?? localStorage.getItem(KEY_STORAGE);
     if (stored) setApiKey(stored);
   } catch {
-    // sessionStorage unavailable; key remains unset until next ?token= intake.
+    // Storage unavailable; key remains unset until next ?token= intake.
   }
 }
 

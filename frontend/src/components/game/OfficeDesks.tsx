@@ -302,22 +302,27 @@ export function OfficeDecor(): ReactNode {
   );
 }
 
-/** Owner name per PINNED_DESKS entry (Sol Docker uses the boss desk). */
-const PINNED_DESK_OWNERS = [
-  "Sol Webserver",
-  "GhostReporting",
-] as const;
+/**
+ * Owner name + stable desk entity id per PINNED_DESKS entry (Sol Docker uses
+ * the boss desk). Issue 714: the entity id stays pinned
+ * ("desk-ghostreporting") while the display name becomes "Ghost Protocol",
+ * so the operator's saved layout override for that desk keeps applying.
+ */
+const PINNED_DESK_OWNERS: readonly { name: string; deskId: string }[] = [
+  { name: "Sol Webserver", deskId: "desk-sol-webserver" },
+  { name: "Ghost Protocol", deskId: "desk-ghostreporting" },
+];
 
 /** Persistent-identity workstations (issue 226 R5) - only when present. */
 export function SolDesks({ present }: { present: Set<string> }): ReactNode {
   return (
     <>
       {PINNED_DESKS.map((desk, i) =>
-        present.has(PINNED_DESK_OWNERS[i]) ? (
+        present.has(PINNED_DESK_OWNERS[i].name) ? (
           <DeskSprite
             key={`pinned-desk-${i}`}
-            id={`desk-${PINNED_DESK_OWNERS[i].toLowerCase().replace(/\s+/g, "-")}`}
-            name={`${PINNED_DESK_OWNERS[i]}'s Desk`}
+            id={PINNED_DESK_OWNERS[i].deskId}
+            name={`${PINNED_DESK_OWNERS[i].name}'s Desk`}
             desk={desk}
           />
         ) : null,

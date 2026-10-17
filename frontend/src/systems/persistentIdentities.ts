@@ -20,7 +20,7 @@ export interface PersistentAgent {
 export const PERSISTENT_SEEDS: readonly { name: string; id: string }[] = [
   { name: "Sol Docker", id: "gateway-dockerhost" },
   { name: "Sol Webserver", id: "gateway-webserver" },
-  { name: "GhostReporting", id: "ai-companion" },
+  { name: "Ghost Protocol", id: "ai-companion" },
 ] as const;
 
 const SEED_NAMES = new Set(PERSISTENT_SEEDS.map((s) => s.name));
