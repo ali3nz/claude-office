@@ -71,6 +71,7 @@ import {
   assignDeskSeats,
   overflowSeatCount,
   isDeskSpritePath,
+  computeShareOffsets,
 } from "@/systems/deskSeats";
 import {
   clampFeetToFloor,
@@ -362,9 +363,10 @@ function agentDisplayPosition(agent: {
   if (deskNum) {
     const seat = getDeskSeat(deskNum);
     // Overflow arrivals stand (no desk), so no forward offset.
+    const share = shareOffsetCache.get(agent.id);
     return clampFeetToFloor({
-      x: seat.x,
-      y: seat.y + (seat.desk ? STAND_DESK_FORWARD : 0),
+      x: seat.x + (share?.x ?? 0),
+      y: seat.y + (seat.desk ? STAND_DESK_FORWARD : 0) + (share?.y ?? 0),
     });
   }
   return clampFeetToFloor(agent.currentPosition);
@@ -437,6 +439,12 @@ function isRecentlyActive(
  * render-scoped cache lets the position helpers see it.
  */
 let deskAssignmentCache = new Map<string, number>();
+
+/**
+ * Issue 714 follow-up: lateral offsets for agents sharing one seat, so two
+ * characters never draw on top of each other at the same desk.
+ */
+let shareOffsetCache = new Map<string, { x: number; y: number }>();
 
 /** Dedicated corner seat per Sol gateway character (issue 226 R5). */
 const SOL_SEATS: Record<string, { x: number; y: number }> = PINNED_SEATS;
@@ -1012,10 +1020,12 @@ export function OfficeGame(): ReactNode {
         PINNED_NAME_SET,
         deskSeats.length,
         overflowSeatCount(),
+        deskSeats.filter((s) => !s.base).length,
       ),
     [visibleAgents, deskSeats],
   );
   deskAssignmentCache = deskAssignments;
+  shareOffsetCache = computeShareOffsets(deskAssignments);
   const occupiedDeskNumbers = useMemo(
     () => new Set<number>(deskAssignments.values()),
     [deskAssignments],

@@ -5,7 +5,12 @@
  * the assignment rules.
  */
 import { describe, expect, it } from "vitest";
-import { assignDeskSeats, buildDeskSeats } from "@/systems/deskSeats";
+import {
+  assignDeskSeats,
+  buildDeskSeats,
+  computeShareOffsets,
+  SHARE_OFFSET_SPACING,
+} from "@/systems/deskSeats";
 import {
   clampDeskSeatY,
   clampFeetToFloor,
@@ -103,5 +108,42 @@ describe("assignDeskSeats (issue 714 follow-up)", () => {
     );
     expect(map.get("a0")).toBe(1); // re-seated on a real desk
     expect(map.get("a1")).toBe(2);
+  });
+
+  it("prefers a free VISIBLE desk over an invisible anchor seat", () => {
+    // 3 seats, only the first 2 are visible operator desks; the agent claims
+    // seat 3 (an invisible authored anchor).
+    const map = assignDeskSeats(
+      [{ id: "a0", name: null, desk: 3 }],
+      new Set(),
+      3,
+      0,
+      2,
+    );
+    expect(map.get("a0")).toBeLessThanOrEqual(2);
+  });
+});
+
+describe("share offsets (issue 714 follow-up)", () => {
+  const agents = (n: number) =>
+    Array.from({ length: n }, (_, i) => ({
+      id: `a${i}`,
+      name: null as string | null,
+      desk: null as number | null,
+    }));
+
+  it("fans agents that share one seat so they never overlap", () => {
+    const map = assignDeskSeats(agents(3), new Set(), 1, 1); // 2 seats, 3 agents
+    const offsets = computeShareOffsets(map);
+    expect(offsets.size).toBeGreaterThanOrEqual(2);
+    const xs = [...offsets.values()].map((o) => o.x);
+    expect(Math.max(...xs) - Math.min(...xs)).toBeGreaterThanOrEqual(
+      SHARE_OFFSET_SPACING,
+    );
+  });
+
+  it("gives agents with their own seat no offset", () => {
+    const map = assignDeskSeats(agents(2), new Set(), 2, 0);
+    expect(computeShareOffsets(map).size).toBe(0);
   });
 });

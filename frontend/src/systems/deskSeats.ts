@@ -209,11 +209,49 @@ export interface SeatAssignmentAgent {
  * and pool desks are never doubled up. Pinned identities never receive a
  * pool or overflow seat.
  */
+/**
+ * Issue 714 follow-up (operator: "make sure agents do not overlap even when
+ * working at same desk if possible"): when more agents are on the floor than
+ * there are seats, the assignment shares a seat - fan the sharers sideways so
+ * no two sprites draw on top of each other. 56px keeps the ~53px-wide
+ * characters clear of one another.
+ */
+export const SHARE_OFFSET_SPACING = 56;
+
+/** Lateral offset per agent for seats shared by more than one agent. */
+export function computeShareOffsets(
+  assignments: ReadonlyMap<string, number>,
+): Map<string, { x: number; y: number }> {
+  const bySeat = new Map<number, string[]>();
+  for (const [id, seat] of assignments) {
+    const list = bySeat.get(seat);
+    if (list) list.push(id);
+    else bySeat.set(seat, [id]);
+  }
+  const offsets = new Map<string, { x: number; y: number }>();
+  for (const ids of bySeat.values()) {
+    if (ids.length < 2) continue;
+    ids.forEach((id, i) => {
+      const dx = (i - (ids.length - 1) / 2) * SHARE_OFFSET_SPACING;
+      offsets.set(id, { x: dx, y: 0 });
+    });
+  }
+  return offsets;
+}
+
 export function assignDeskSeats(
   agents: readonly SeatAssignmentAgent[],
   pinnedNames: ReadonlySet<string>,
   seatCount: number,
   overflowCount: number = 0,
+  /**
+   * How many of the leading pool seats are VISIBLE desks (operator-inserted
+   * furniture). Issue 714 follow-up (operator: "new agents should go to empty
+   * desks"): a free visible desk must be taken before an invisible authored
+   * anchor seat, so a new arrival never stands at bare floor while an empty
+   * desk the operator can see sits there.
+   */
+  visibleSeatCount: number = seatCount,
 ): Map<string, number> {
   const total = seatCount + overflowCount;
   const map = new Map<string, number>();
@@ -226,9 +264,15 @@ export function assignDeskSeats(
   for (const a of agents) {
     if (a.name && pinnedNames.has(a.name)) continue;
     // Issue 714 follow-up (operator: never two agents at one desk unless all
-    // desks are full): only a REAL desk may be kept from the backend. An
-    // overflow index must not pin an agent to standing while desks sit free.
-    if (a.desk && a.desk >= 1 && a.desk <= seatCount && !used.has(a.desk)) {
+    // desks are full): only a REAL, VISIBLE desk may be kept from the backend.
+    // An overflow index must not pin an agent to standing while desks sit
+    // free, and an invisible anchor must not beat an empty visible desk.
+    if (
+      a.desk &&
+      a.desk >= 1 &&
+      a.desk <= Math.min(seatCount, visibleSeatCount) &&
+      !used.has(a.desk)
+    ) {
       used.add(a.desk);
       map.set(a.id, a.desk);
     }
