@@ -14,12 +14,15 @@ TestSimulationTeamScenario  - Lead + teammate session pairing
 TestSimulationStateVerification - Game-state assertions after key events
 """
 
+import sys
 from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
+import pytest
 from fastapi.testclient import TestClient
 
+from app.api.routes import sessions as sessions_routes
 from app.config import get_settings
 from app.main import app
 
@@ -727,6 +730,87 @@ class TestSessionsAPISmoke:
             headers={"X-API-Key": get_settings().effective_api_key},
         )
         assert resp.status_code == 404
+
+
+class TestFocusTerminalAvailability:
+    """Focus says 'unavailable' when this host has no terminal (issue 729)."""
+
+    @staticmethod
+    def _which(*present: str) -> Any:
+        return lambda name: f"/usr/bin/{name}" if name in present else None
+
+    def test_linux_needs_display_and_a_terminal_binary(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(sys, "platform", "linux")
+        monkeypatch.setattr(sessions_routes.shutil, "which", self._which("wmctrl"))
+        monkeypatch.setenv("DISPLAY", ":0")
+        assert sessions_routes._focus_terminal_available() is True
+
+        monkeypatch.setattr(sessions_routes.shutil, "which", self._which("xdg-terminal"))
+        assert sessions_routes._focus_terminal_available() is True
+
+        monkeypatch.delenv("DISPLAY")
+        assert sessions_routes._focus_terminal_available() is False
+
+        monkeypatch.setenv("DISPLAY", ":0")
+        monkeypatch.setattr(sessions_routes.shutil, "which", self._which())
+        assert sessions_routes._focus_terminal_available() is False
+
+    def test_macos_needs_osascript(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(sys, "platform", "darwin")
+        monkeypatch.setattr(sessions_routes.shutil, "which", self._which("osascript"))
+        assert sessions_routes._focus_terminal_available() is True
+
+        monkeypatch.setattr(sessions_routes.shutil, "which", self._which())
+        assert sessions_routes._focus_terminal_available() is False
+
+    def test_other_platforms_have_no_focus_path(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(sys, "platform", "win32")
+        assert sessions_routes._focus_terminal_available() is False
+
+    def test_endpoint_reports_unavailable_without_terminal(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        sid = f"focus-unavailable-{uuid4()}"
+        post_event(sid, "session_start", {"project_name": "FocusProj"})
+        monkeypatch.setattr(sessions_routes, "_focus_terminal_available", lambda: False)
+
+        resp = client.post(
+            f"/api/v1/sessions/{sid}/focus",
+            json={},
+            headers={"X-API-Key": get_settings().effective_api_key},
+        )
+        assert resp.status_code == 200
+        assert resp.json() == {
+            "status": "unavailable",
+            "message": "No terminal on this host",
+        }
+
+    def test_endpoint_reports_success_when_a_terminal_is_raised(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        sid = f"focus-success-{uuid4()}"
+        post_event(sid, "session_start", {"project_name": "FocusProj"})
+        monkeypatch.setattr(sessions_routes, "_focus_terminal_available", lambda: True)
+
+        class _Proc:
+            async def wait(self) -> int:
+                return 0
+
+        async def _fake_exec(*_args: Any, **_kwargs: Any) -> _Proc:
+            # Stub the launcher so the test never raises a real window.
+            return _Proc()
+
+        monkeypatch.setattr(sessions_routes.asyncio, "create_subprocess_exec", _fake_exec)
+
+        resp = client.post(
+            f"/api/v1/sessions/{sid}/focus",
+            json={},
+            headers={"X-API-Key": get_settings().effective_api_key},
+        )
+        assert resp.status_code == 200
+        assert resp.json() == {"status": "success", "message": f"Session {sid} focused"}
 
 
 # ---------------------------------------------------------------------------

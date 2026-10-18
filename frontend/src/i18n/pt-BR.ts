@@ -272,6 +272,7 @@ const ptBR: Record<TranslationKey, string> = {
   "attention.commandBar.toggleObstacles": "Alternar Obstáculos",
   "attention.commandBar.noResults": "Nenhum comando encontrado",
   "attention.popup.focusTerminal": "Focar Terminal",
+  "attention.popup.noTerminal": "Nenhum terminal neste host",
   "attention.popup.close": "Fechar",
   "attention.popup.state": "Estado",
   "attention.popup.task": "Tarefa",

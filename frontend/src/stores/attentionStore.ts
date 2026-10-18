@@ -29,6 +29,8 @@ export interface FocusPopupState {
   agentId: string;
   screenX: number;
   screenY: number;
+  /** Set when the host has no terminal to raise; the popup stays open to say so. */
+  notice?: "no-terminal" | null;
 }
 
 interface AttentionState {
@@ -187,6 +189,19 @@ export const useAttentionStore = create<AttentionState>()((set, get) => ({
           type: "error",
           message: `Focus terminal failed: ${res.statusText}`,
         });
+      } else {
+        const payload: { status?: string } | null = await res
+          .json()
+          .catch(() => null);
+        if (payload?.status === "unavailable") {
+          // Nothing was focused: keep the popup open and say why.
+          set((state) =>
+            state.focusPopup
+              ? { focusPopup: { ...state.focusPopup, notice: "no-terminal" } }
+              : {},
+          );
+          return;
+        }
       }
     } catch {
       get().processEvent({

@@ -270,6 +270,7 @@ const en = {
   "attention.commandBar.toggleObstacles": "Toggle Obstacles",
   "attention.commandBar.noResults": "No matching commands",
   "attention.popup.focusTerminal": "Focus Terminal",
+  "attention.popup.noTerminal": "No terminal on this host",
   "attention.popup.close": "Close",
   "attention.popup.state": "State",
   "attention.popup.task": "Task",

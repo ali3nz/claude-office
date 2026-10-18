@@ -272,6 +272,7 @@ const es: Record<TranslationKey, string> = {
   "attention.commandBar.toggleObstacles": "Alternar Obstáculos",
   "attention.commandBar.noResults": "Sin comandos coincidentes",
   "attention.popup.focusTerminal": "Enfocar Terminal",
+  "attention.popup.noTerminal": "No hay terminal en este host",
   "attention.popup.close": "Cerrar",
   "attention.popup.state": "Estado",
   "attention.popup.task": "Tarea",

@@ -146,6 +146,11 @@ export default function AgentPopup(): ReactNode {
             {t("attention.popup.close")}
           </button>
         </div>
+        {focusPopup.notice === "no-terminal" && (
+          <p role="status" className="mt-2 text-[11px] text-amber-400">
+            {t("attention.popup.noTerminal")}
+          </p>
+        )}
       </div>
     </div>
   );

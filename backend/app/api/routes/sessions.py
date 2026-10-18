@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import os
+import shutil
 import subprocess
 import sys
 from datetime import UTC
@@ -325,6 +326,21 @@ def _validate_clipboard_message(message: str | None) -> str | None:
     return message
 
 
+def _focus_terminal_available() -> bool:
+    """Return True when this host has a terminal the focus endpoint can raise.
+
+    macOS needs ``osascript``. Linux needs a display (``DISPLAY``) plus
+    ``xdg-terminal`` or ``wmctrl``. Other platforms have no focus path.
+    """
+    if sys.platform == "darwin":
+        return shutil.which("osascript") is not None
+    if sys.platform == "linux":
+        return bool(os.environ.get("DISPLAY")) and (
+            shutil.which("xdg-terminal") is not None or shutil.which("wmctrl") is not None
+        )
+    return False
+
+
 @router.post("/{session_id}/focus")
 async def focus_session(
     session_id: str,
@@ -342,7 +358,8 @@ async def focus_session(
         db: Database session dependency.
 
     Returns:
-        A status payload confirming the focus action.
+        ``success`` when the terminal was raised, or ``unavailable`` when this
+        host has no terminal to raise (nothing is focused in that case).
 
     Raises:
         HTTPException: 404 if the session is not found. Any other failure
@@ -353,8 +370,10 @@ async def focus_session(
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
+    terminal_available = _focus_terminal_available()
+
     # Bring Terminal to foreground (non-blocking async subprocess)
-    if sys.platform == "darwin":
+    if sys.platform == "darwin" and terminal_available:
         await asyncio.create_subprocess_exec(
             "osascript",
             "-e",
@@ -362,7 +381,7 @@ async def focus_session(
             stdout=asyncio.subprocess.DEVNULL,
             stderr=asyncio.subprocess.DEVNULL,
         )
-    elif sys.platform == "linux":
+    elif sys.platform == "linux" and terminal_available:
         # Try common Linux terminal activators; non-fatal if unavailable.
         for cmd in [
             ["xdg-terminal", "wait"],
@@ -402,6 +421,8 @@ async def focus_session(
             except FileNotFoundError:
                 logger.warning("Clipboard command not found: %s", clipboard_cmd[0])
 
+    if not terminal_available:
+        return {"status": "unavailable", "message": "No terminal on this host"}
     return {"status": "success", "message": f"Session {session_id} focused"}
 
 
