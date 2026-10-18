@@ -70,7 +70,15 @@ import {
   setDeskSeatSnapshot,
   assignDeskSeats,
   overflowSeatCount,
+  isDeskSpritePath,
 } from "@/systems/deskSeats";
+import {
+  clampFeetToFloor,
+  clampDeskSeatY,
+  floorEdgeY,
+  FLOOR_FOOT_MARGIN,
+  STAND_DESK_FORWARD,
+} from "@/systems/floorRegion";
 import { setBehavior, tickBehaviors, getOffset } from "@/systems/officeBehavior";
 import type { AgentAnimationState } from "@/stores/slices/types";
 import {
@@ -347,15 +355,19 @@ function agentDisplayPosition(agent: {
   // this offset the desk sprite is painted across the character's body.
   if (agent.name && SOL_SEATS[agent.name]) {
     const s = SOL_SEATS[agent.name];
-    return { x: s.x, y: s.y + STAND_DESK_FORWARD };
+    // Issue 714 follow-up: nobody renders partially off the floor.
+    return clampFeetToFloor({ x: s.x, y: s.y + STAND_DESK_FORWARD });
   }
   const deskNum = deskAssignmentCache.get(agent.id) ?? agent.desk;
   if (deskNum) {
     const seat = getDeskSeat(deskNum);
     // Overflow arrivals stand (no desk), so no forward offset.
-    return { x: seat.x, y: seat.y + (seat.desk ? STAND_DESK_FORWARD : 0) };
+    return clampFeetToFloor({
+      x: seat.x,
+      y: seat.y + (seat.desk ? STAND_DESK_FORWARD : 0),
+    });
   }
-  return agent.currentPosition;
+  return clampFeetToFloor(agent.currentPosition);
 }
 
 /**
@@ -397,8 +409,6 @@ function agentStateGlyph(agent: {
  */
 const IDLE_TIMEOUT_MS = 5 * 60 * 1000;
 
-/** How far forward of the desk anchor a standing character is drawn. */
-const STAND_DESK_FORWARD = 40;
 const ALWAYS_PRESENT = new Set([
   "Sol Docker",
   "Sol Webserver",
@@ -624,9 +634,11 @@ function BehaviorGroup({
       // wins over the behaviour engine's computed seat/walk position. Keep the
       // idle depth boost the zIndex prop carries (review I1 follow-up).
       node.x = override.x;
-      node.y = override.y;
+      // Issue 714 follow-up: a dragged avatar still may not sit off the
+      // carpet - clamp to the floor's lower edge.
+      node.y = Math.min(override.y, floorEdgeY(override.x) - FLOOR_FOOT_MARGIN);
       if (zIndex !== undefined) {
-        node.zIndex = override.y + (zIndex - baseY);
+        node.zIndex = node.y + (zIndex - baseY);
       }
     } else {
       node.x = baseX + off.x;
@@ -717,12 +729,17 @@ function InsertedSpriteView({ entity }: { entity: InsertedSprite }): ReactNode {
   const target = item?.defaultHeight ?? Math.min(texture.height, 180);
   const height = Math.max(24, Math.min(target, 220));
   const width = (texture.width / texture.height) * height;
+  // Issue 714 follow-up: an operator desk renders at the same clamped anchor
+  // its occupant is seated at, so the pair never separates at the floor edge.
+  const defaultY = isDeskSpritePath(entity.spritePath)
+    ? clampDeskSeatY(entity.x, entity.y)
+    : entity.y;
   return (
     <EditableSprite
       id={entity.id}
       name={entity.name}
       defaultX={entity.x}
-      defaultY={entity.y}
+      defaultY={defaultY}
       flip={turned.flip}
       width={width}
       height={height}

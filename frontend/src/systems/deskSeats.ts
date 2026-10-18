@@ -36,6 +36,10 @@ import {
   type EntityOverride,
   type InsertedSprite,
 } from "@/stores/officeEditStore";
+import {
+  clampDeskSeatY,
+  clampFeetToFloor,
+} from "@/systems/floorRegion";
 
 export interface DeskSeat {
   /** Stable entity id: `desk-<n>`, the sprite id, or `overflow-<n>`. */
@@ -71,6 +75,14 @@ export function deskKindFromPath(path: string): DeskSpriteKind {
  * base anchors (skipping hidden ones). Base anchors have no furniture in
  * normal view; they are bare standing spots at the arranged positions.
  */
+/**
+ * Two seats closer than this are the same physical desk. Issue 714 follow-up
+ * (operator: "not 2 at the same desk unless all desks are full"): layouts
+ * sometimes place an inserted desk on top of an authored anchor, which used
+ * to seat two agents at one visible desk.
+ */
+const SEAT_DEDUPE_DIST = 40;
+
 export function buildDeskSeats(
   overrides: Record<string, EntityOverride>,
   inserted: readonly InsertedSprite[],
@@ -78,14 +90,24 @@ export function buildDeskSeats(
   const placed: DeskSeat[] = [];
   for (const e of inserted) {
     if (!isDeskSpritePath(e.spritePath)) continue;
-    placed.push({
+    const seat: DeskSeat = {
       id: e.id,
       x: e.x,
-      y: e.y,
+      // Issue 714 follow-up: keep the whole character (seat + forward offset)
+      // on the carpet - the desk moves with it, the pair never separates.
+      y: clampDeskSeatY(e.x, e.y),
       kind: deskKindFromPath(e.spritePath),
       base: false,
       desk: true,
-    });
+    };
+    // An inserted desk dropped on top of an existing seat is not a second
+    // seat: the operator's visible desk wins, no agent doubles up there.
+    if (
+      placed.some((s) => Math.hypot(s.x - seat.x, s.y - seat.y) < SEAT_DEDUPE_DIST)
+    ) {
+      continue;
+    }
+    placed.push(seat);
   }
 
   const anchors: DeskSeat[] = [];
@@ -95,28 +117,44 @@ export function buildDeskSeats(
     const spot = DESK_SPOTS[i];
     const paired = DESKS[SEAT_TO_DESK_INDEX[i]] ?? DESKS[i] ?? DESKS[0];
     const ov = overrides[id];
-    anchors.push({
+    const x = ov?.x ?? spot.position.x;
+    const seat: DeskSeat = {
       id,
-      x: ov?.x ?? spot.position.x,
-      y: ov?.y ?? spot.position.y,
+      x,
+      y: clampDeskSeatY(x, ov?.y ?? spot.position.y),
       kind: paired.kind,
       base: true,
       desk: true,
-    });
+    };
+    // Authored anchors coinciding with an operator desk are not extra seats
+    // (authored desks do not render in normal view - the operator desk is the
+    // visible furniture and wins).
+    if (
+      [...placed, ...anchors].some(
+        (s) => Math.hypot(s.x - seat.x, s.y - seat.y) < SEAT_DEDUPE_DIST,
+      )
+    ) {
+      continue;
+    }
+    anchors.push(seat);
   }
 
   return [...placed, ...anchors];
 }
 
 /** Standing overflow spots as seats (static; not layout-driven). */
-const OVERFLOW_SEATS: DeskSeat[] = OVERFLOW_SPOTS.map((p, i) => ({
-  id: `overflow-${i + 1}`,
-  x: p.x,
-  y: p.y,
-  kind: "left-front",
-  base: false,
-  desk: false,
-}));
+const OVERFLOW_SEATS: DeskSeat[] = OVERFLOW_SPOTS.map((p, i) => {
+  // Issue 714 follow-up: standing feet stay on the carpet too.
+  const feet = clampFeetToFloor(p);
+  return {
+    id: `overflow-${i + 1}`,
+    x: feet.x,
+    y: feet.y,
+    kind: "left-front",
+    base: false,
+    desk: false,
+  };
+});
 
 /** How many standing overflow spots exist (issue 360). */
 export function overflowSeatCount(): number {
@@ -187,7 +225,10 @@ export function assignDeskSeats(
   };
   for (const a of agents) {
     if (a.name && pinnedNames.has(a.name)) continue;
-    if (a.desk && a.desk >= 1 && a.desk <= total && !used.has(a.desk)) {
+    // Issue 714 follow-up (operator: never two agents at one desk unless all
+    // desks are full): only a REAL desk may be kept from the backend. An
+    // overflow index must not pin an agent to standing while desks sit free.
+    if (a.desk && a.desk >= 1 && a.desk <= seatCount && !used.has(a.desk)) {
       used.add(a.desk);
       map.set(a.id, a.desk);
     }

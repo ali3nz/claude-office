@@ -8,6 +8,7 @@ import {
   overflowSeatCount,
   setDeskSeatSnapshot,
 } from "./deskSeats";
+import { clampDeskSeatY } from "./floorRegion";
 import { DESK_SPOTS, OVERFLOW_SPOTS } from "@/themes/w17ant-spots";
 import type { InsertedSprite } from "@/stores/officeEditStore";
 
@@ -47,7 +48,10 @@ describe("deskSeats — layout-driven desk pool", () => {
     expect(seats.some((s) => s.id === "desk-5")).toBe(false);
     const moved = seats.find((s) => s.id === "desk-3");
     expect(moved?.x).toBe(259);
-    expect(moved?.y).toBe(748);
+    // Issue 714 follow-up: a seat whose occupant would fall off the carpet is
+    // clamped up (desk + character keep their 40px relationship on the floor).
+    expect(moved?.y).toBe(clampDeskSeatY(259, 748));
+    expect(moved?.y).toBeLessThanOrEqual(748);
     expect(seats.every((s) => s.desk)).toBe(true);
   });
 
