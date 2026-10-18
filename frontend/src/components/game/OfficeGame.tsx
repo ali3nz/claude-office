@@ -580,13 +580,11 @@ function isVisibleAgent(agent: {
   if (DEPARTING_PHASES.has(agent.phase)) return false;
   // Sol gateway corner workstations sit outside the main floor box on purpose.
   if (agent.name && SOL_SEATS[agent.name]) return true;
-  // Agents with a desk are seated at a known-good workstation by construction
-  // (issue 226 R5: this must actually SKIP the region test, or seats outside
-  // the box - e.g. the Sol corners - are hidden). The computed assignment
-  // counts too, so a backend desk-less agent still gets a real workstation.
-  if (agent.desk || deskAssignmentCache.has(agent.id)) return true;
-  const p = agentDisplayPosition(agent);
-  return p.x >= 280 && p.x <= 1000 && p.y >= 400 && p.y <= 850;
+  // Issue 714 follow-up 3: a non-pinned agent is drawn ONLY when the seat
+  // policy gave it a seat. The backend desk number is no longer trusted here:
+  // it used to draw an unseated agent on a seat already holding someone.
+  // Agents beyond capacity (5 desks + 6 spots, max 2 each) stay off the floor.
+  return deskAssignmentCache.has(agent.id);
 }
 
 // Issue 226 R3/R4: display-only movement group. Reads the behavior engine's
@@ -1013,10 +1011,11 @@ export function OfficeGame(): ReactNode {
   // Seat every non-pinned agent on the fixed pool; extra agents STAND at
   // the overflow spots (never spawn a desk, never double up a desk).
   // Pinned identities keep their own fixed seats.
+  // Departing agents release their seat at once; they must not hold one.
   const deskAssignments = useMemo(
     () =>
       assignDeskSeats(
-        visibleAgents,
+        visibleAgents.filter((a) => !DEPARTING_PHASES.has(a.phase)),
         PINNED_NAME_SET,
         deskSeats.length,
         overflowSeatCount(),
@@ -1500,6 +1499,7 @@ export function OfficeGame(): ReactNode {
                     .filter(
                       (agent) =>
                         agent.bubble.content &&
+                        isVisibleAgent(agent) &&
                         !isInElevatorZone(agent.currentPosition),
                     )
                     .map((agent) => (

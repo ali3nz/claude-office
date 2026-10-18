@@ -200,16 +200,6 @@ export interface SeatAssignmentAgent {
 }
 
 /**
- * Assign each non-pinned agent a seat number (1-based).
- *
- * An agent keeps its backend seat when it is valid and free; otherwise it
- * takes the lowest free pool seat, then the lowest free overflow spot, and
- * only once those are full does it share an overflow spot (cycling). Pool
- * seats are never extended, so an arrival can never spawn a brand-new desk,
- * and pool desks are never doubled up. Pinned identities never receive a
- * pool or overflow seat.
- */
-/**
  * Issue 714 follow-up (operator: "make sure agents do not overlap even when
  * working at same desk if possible"): when more agents are on the floor than
  * there are seats, the assignment shares a seat - fan the sharers sideways so
@@ -239,6 +229,28 @@ export function computeShareOffsets(
   return offsets;
 }
 
+/**
+ * Most agents that may stand on one seat (operator: "max 2 at any one desk").
+ * A second agent sits down only once every seat already holds one.
+ */
+export const MAX_AGENTS_PER_SEAT = 2;
+
+/**
+ * Assign each non-pinned agent a seat number (1-based), in this order
+ * (issue 714 follow-up 3; operator: empty desks first, Bandi / pool-table
+ * spots next, never more than two agents on one seat):
+ *
+ *  1. keep a valid backend seat when it is a real visible desk and EMPTY;
+ *  2. take the lowest EMPTY seat: pool desks first, then the overflow spots
+ *     (the first of which stands beside Bandi the cat and the pool table);
+ *  3. only when every seat already holds one agent, add a second agent to the
+ *     lowest seat that holds fewer than MAX_AGENTS_PER_SEAT (desks first);
+ *  4. when no seat can take another agent, the agent gets no seat at all, so
+ *     it is not drawn rather than stacked on someone.
+ *
+ * Pinned identities never take a pool or overflow seat. Duplicate ids are
+ * placed once. Seats are never extended, so an arrival cannot create a desk.
+ */
 export function assignDeskSeats(
   agents: readonly SeatAssignmentAgent[],
   pinnedNames: ReadonlySet<string>,
@@ -256,38 +268,56 @@ export function assignDeskSeats(
   const total = seatCount + overflowCount;
   const map = new Map<string, number>();
   if (total <= 0) return map;
-  const used = new Set<number>();
-  const freeIn = (from: number, to: number): number | null => {
-    for (let n = from; n <= to; n++) if (!used.has(n)) return n;
+  // Agents currently holding each seat number (1..total).
+  const load = new Map<number, number>();
+  const seatLoad = (n: number): number => load.get(n) ?? 0;
+  const place = (id: string, n: number): void => {
+    map.set(id, n);
+    load.set(n, seatLoad(n) + 1);
+  };
+  const isPinned = (a: SeatAssignmentAgent): boolean =>
+    Boolean(a.name && pinnedNames.has(a.name));
+  // Visible desks first, then the invisible anchors, then the overflow spots.
+  const firstEmpty = (): number | null => {
+    for (let n = 1; n <= total; n++) if (seatLoad(n) === 0) return n;
     return null;
   };
-  for (const a of agents) {
-    if (a.name && pinnedNames.has(a.name)) continue;
-    // Issue 714 follow-up (operator: never two agents at one desk unless all
-    // desks are full): only a REAL, VISIBLE desk may be kept from the backend.
-    // An overflow index must not pin an agent to standing while desks sit
-    // free, and an invisible anchor must not beat an empty visible desk.
+  const firstWithRoom = (): number | null => {
+    for (let n = 1; n <= total; n++) {
+      if (seatLoad(n) > 0 && seatLoad(n) < MAX_AGENTS_PER_SEAT) return n;
+    }
+    return null;
+  };
+  // Duplicate ids are placed once (the first occurrence wins).
+  const seen = new Set<string>();
+  const candidates = agents.filter((a) => {
+    if (isPinned(a) || seen.has(a.id)) return false;
+    seen.add(a.id);
+    return true;
+  });
+  // 1. Keep a valid backend seat that is a real visible desk and still empty.
+  for (const a of candidates) {
     if (
       a.desk &&
       a.desk >= 1 &&
       a.desk <= Math.min(seatCount, visibleSeatCount) &&
-      !used.has(a.desk)
+      seatLoad(a.desk) === 0
     ) {
-      used.add(a.desk);
-      map.set(a.id, a.desk);
+      place(a.id, a.desk);
     }
   }
-  let reuse = 0;
-  for (const a of agents) {
-    if (map.has(a.id) || (a.name && pinnedNames.has(a.name))) continue;
-    const n =
-      freeIn(1, seatCount) ??
-      (overflowCount > 0 ? freeIn(seatCount + 1, total) : null) ??
-      (overflowCount > 0
-        ? seatCount + 1 + (reuse++ % overflowCount)
-        : (reuse++ % seatCount) + 1);
-    used.add(n);
-    map.set(a.id, n);
+  // 2. Everyone else takes an EMPTY seat, in order.
+  for (const a of candidates) {
+    if (map.has(a.id)) continue;
+    const empty = firstEmpty();
+    if (empty !== null) place(a.id, empty);
+  }
+  // 3. Every seat already holds one agent: double up, but never past two.
+  for (const a of candidates) {
+    if (map.has(a.id)) continue;
+    const room = firstWithRoom();
+    if (room !== null) place(a.id, room);
+    // 4. Otherwise no seat can take another agent: leave it unseated.
   }
   return map;
 }

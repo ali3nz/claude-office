@@ -248,10 +248,12 @@ class RoomOrchestrator:
         """One floor for every real session/agent, deterministically seated.
 
         Every session's agents become characters (their real names/states).
-        Sessions with no agents contribute one session-level character. The
-        first OFFICE_MAX_SEATED characters get workstations 1..N; overflow is
-        dropped from the floor (still present in the sidebar). No wrapping, no
-        two characters on one workstation.
+        Sessions with no agents contribute one session-level character. Each
+        character keeps a distinct desk number (lowest free, never reused while
+        held). Seat capacity is NOT decided here: the frontend seat policy maps
+        numbers onto the saved layout's real desks, then overflow spots beside
+        Bandi and the pool table, at most two characters per seat (issue 714
+        follow-up 3). Characters without a seat are not drawn.
         """
         first_entry = next(iter(self._sessions.values()))
         first_state = first_entry.sm.to_game_state(first_entry.session_id)
@@ -313,9 +315,13 @@ class RoomOrchestrator:
             else:
                 present.append(
                     (
-                        f"off-{session_id[:10]}",
+                        f"off-{session_id}",
                         Agent(
-                            id=f"off-{session_id[:10]}",
+                            # Issue 714 follow-up 3: the FULL session id. The
+                            # first 10 characters collided across sessions
+                            # started together and collapsed them into one
+                            # character on one desk.
+                            id=f"off-{session_id}",
                             name=office_session_name(
                                 session_id, entry.sm.display_name
                             ),
@@ -339,26 +345,20 @@ class RoomOrchestrator:
                     )
                 )
 
-        # Release the desks of characters that are gone, then fill the free
-        # desks for new arrivals in arrival order.
+        # Release the desks of characters that are gone, then give each new
+        # arrival the lowest desk number nobody holds. Issue 714 follow-up 3:
+        # there is no backend ceiling here. Seat capacity belongs to the saved
+        # layout on the frontend (real desks, then Bandi/open-floor spots, max
+        # two per seat). The old 16-number cap hid sessions while seats were free.
         present_keys = {key for key, _ in present}
         kept = {key: desk for key, desk in assignments.items() if key in present_keys}
         used = set(kept.values())
         for key, _ in present:
             if key in kept:
                 continue
-            free = next(
-                (
-                    d
-                    for d in range(
-                        1, OFFICE_MAX_SEATED + OFFICE_OVERFLOW_SPOTS + 1
-                    )
-                    if d not in used
-                ),
-                None,
-            )
-            if free is None:
-                continue  # floor full - the character stays off the floor
+            free = 1
+            while free in used:
+                free += 1
             kept[key] = free
             used.add(free)
         self._desk_assignments = kept

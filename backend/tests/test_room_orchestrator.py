@@ -3,7 +3,6 @@
 
 from app.core.room_orchestrator import (
     OFFICE_MAX_SEATED,
-    OFFICE_OVERFLOW_SPOTS,
     RoomOrchestrator,
     build_overview,
     office_session_name,
@@ -335,7 +334,10 @@ class TestOfficeNaming360:
 
     def test_overflow_seats_beyond_ten(self) -> None:
         orch = RoomOrchestrator("office")
-        for i in range(OFFICE_MAX_SEATED + 2):
+        # 20 sessions: more than the old 16-number ceiling (OFFICE_MAX_SEATED
+        # plus 6 overflow spots), so the removed cap is actually exercised.
+        count = OFFICE_MAX_SEATED + 10
+        for i in range(count):
             sm = _make_sm()
             sm.agents = {
                 f"w{i}": Agent(
@@ -346,6 +348,21 @@ class TestOfficeNaming360:
         state = orch.merge()
         assert state is not None
         desks = sorted(a.desk for a in state.agents if a.desk)
-        assert OFFICE_MAX_SEATED + 1 in desks
-        assert OFFICE_MAX_SEATED + 2 in desks
-        assert max(desks) <= OFFICE_MAX_SEATED + OFFICE_OVERFLOW_SPOTS
+        # No backend ceiling: every subagent gets its own desk number. Seat
+        # capacity is enforced by the frontend seat policy.
+        assert len(desks) == count
+        assert len(set(desks)) == len(desks)
+        assert max(desks) == count
+
+    def test_sessions_sharing_a_ten_char_prefix_stay_distinct(self) -> None:
+        # Issue 714 follow-up 3: the teammate key used to be the first 10
+        # characters of the session id, so every session started in one window
+        # collapsed into one character on one desk (live: 12 rows, one desk).
+        orch = RoomOrchestrator("office")
+        orch.add_session("oc-ses_eb2AAAAAAA01", _make_sm())
+        orch.add_session("oc-ses_eb2BBBBBBB02", _make_sm())
+        state = orch.merge()
+        assert state is not None
+        teammates = [a for a in state.agents if a.character_type == "teammate"]
+        assert len({a.id for a in teammates}) == 2
+        assert len({a.desk for a in teammates}) == 2
