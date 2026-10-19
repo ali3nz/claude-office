@@ -291,3 +291,28 @@ def test_named_layout_put_is_state_changing_but_get_remains_readable(monkeypatch
         headers={"X-API-Key": keyless.effective_api_key},
     )
     assert allowed.status_code == 200
+
+
+def test_current_layout_serves_bundled_default_when_unset() -> None:
+    """Issue 359: fresh installations open on the bundled default arrangement."""
+    response = client.get("/api/v1/layout", headers=_headers())
+    assert response.status_code == 200
+    layout = response.json()["layout"]
+    assert isinstance(layout, dict)
+    assert layout["version"] == 1
+    assert isinstance(layout["updatedAt"], int) and layout["updatedAt"] > 0
+    assert layout["overrides"]
+    assert layout["inserted"]
+    assert "area" not in layout
+
+
+def test_current_layout_round_trips_published_layout() -> None:
+    published = _snapshot()
+    published.pop("area", None)
+    response = client.put(
+        "/api/v1/layout", json={"layout": published}, headers=_headers()
+    )
+    assert response.status_code == 200, response.text
+    loaded = client.get("/api/v1/layout", headers=_headers())
+    assert loaded.status_code == 200
+    assert loaded.json()["layout"] == published

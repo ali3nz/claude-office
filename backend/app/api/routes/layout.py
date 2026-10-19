@@ -4,6 +4,7 @@ import json
 import logging
 import unicodedata
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -97,6 +98,28 @@ class SharedLayoutBody(BaseModel):
         return value
 
 
+# Bundled default arrangement served when no layout has been published yet
+# (fresh installations open on the curated office instead of the bare code
+# defaults). Validated once at import; when the asset is missing or invalid
+# the endpoint falls back to returning null as before.
+DEFAULT_LAYOUT_PATH = Path(__file__).resolve().parents[2] / "assets" / "default_layout.json"
+
+
+def _load_bundled_default_layout() -> dict[str, object] | None:
+    """Load and validate the bundled default layout, or None when unusable."""
+    try:
+        raw = json.loads(DEFAULT_LAYOUT_PATH.read_text(encoding="utf-8"))
+        return SharedLayoutBody.model_validate(raw).model_dump(
+            mode="json", by_alias=True, exclude_none=True
+        )
+    except Exception:
+        logger.exception("Bundled default office layout is missing or invalid")
+        return None
+
+
+_BUNDLED_DEFAULT_LAYOUT = _load_bundled_default_layout()
+
+
 def _normalize_layout_name(name: str) -> str:
     """Normalize and bound a user-visible layout name."""
     normalized = unicodedata.normalize("NFC", name).strip()
@@ -155,18 +178,24 @@ async def _save_saved_layouts(db: AsyncSession, saved: dict[str, object]) -> Non
 async def get_layout(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> dict[str, object]:
-    """Return the shared current office layout, or null when none was published."""
+    """Return the shared current office layout.
+
+    Serves the bundled default arrangement when no valid layout has been
+    published yet, so fresh installations open on the curated office.
+    """
     result = await db.execute(
         select(UserPreference).where(UserPreference.key == LAYOUT_KEY)
     )
     pref = result.scalar_one_or_none()
-    if pref is None or not pref.value:
-        return {"layout": None}
-    try:
-        return {"layout": json.loads(pref.value)}
-    except (TypeError, ValueError):
-        logger.warning("Stored office layout is not valid JSON; ignoring it")
-        return {"layout": None}
+    if pref is not None and pref.value:
+        try:
+            layout = SharedLayoutBody.model_validate(json.loads(pref.value))
+            return {
+                "layout": layout.model_dump(mode="json", by_alias=True, exclude_none=True)
+            }
+        except (TypeError, ValueError, ValidationError):
+            logger.warning("Stored office layout is invalid; serving the bundled default")
+    return {"layout": _BUNDLED_DEFAULT_LAYOUT}
 
 
 @router.put("")
