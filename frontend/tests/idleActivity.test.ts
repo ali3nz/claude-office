@@ -18,6 +18,13 @@ import { useGameStore } from "@/stores/gameStore";
 import { reconcileState, type ReconcilerContext } from "@/systems/stateReconciler";
 import type { WebSocketControllerOptions } from "@/systems/webSocketController";
 import type { Agent, BubbleContent, GameState, Position } from "@/types";
+import {
+  IDLE_TIMEOUT_MS,
+  countRecentlyActive,
+  filterRecentlyActive,
+  isRecentlyActive,
+} from "@/systems/idleSweep";
+import { PERSISTENT_IDS } from "@/systems/persistentIdentities";
 
 // The reconciler drives the machine service; these store-level tests need none of it.
 vi.mock("@/machines/agentMachineService", () => ({
@@ -283,5 +290,44 @@ describe("reconnect replay does not re-arm the idle clock", () => {
     controller.opts.onReconnectReset();
     deliver(controller, "grep");
     expect(clockOf("off-quiet")).toBe(T0 + 60_000);
+  });
+});
+
+// Operator 2026-10-21: the floor, both sidebars and the header count must agree
+// on who is idle, so they share one predicate (systems/idleSweep.ts).
+describe("idle sweep predicate shared by floor, sidebars and header", () => {
+  const NOW = 10_000_000;
+  const agent = (id: string, name: string | null, ageMs?: number) => ({
+    id,
+    name,
+    lastActivityAt: ageMs === undefined ? undefined : NOW - ageMs,
+  });
+
+  it("drops an agent once it has had no real activity for 5 minutes", () => {
+    expect(isRecentlyActive(agent("fresh", "Fresh", 4 * 60_000), NOW)).toBe(true);
+    expect(isRecentlyActive(agent("edge", "Edge", IDLE_TIMEOUT_MS), NOW)).toBe(false);
+    expect(isRecentlyActive(agent("old", "Old", 6 * 60_000), NOW)).toBe(false);
+  });
+
+  it("keeps the Sol gateways and Ghost Protocol by name or persistent id", () => {
+    const persistentId = [...PERSISTENT_IDS][0];
+    expect(isRecentlyActive(agent("x", "Sol Docker", 60 * 60_000), NOW)).toBe(true);
+    expect(isRecentlyActive(agent("x", "Ghost Protocol", 60 * 60_000), NOW)).toBe(true);
+    expect(isRecentlyActive(agent(persistentId, "Plain", 60 * 60_000), NOW)).toBe(true);
+  });
+
+  it("keeps an agent that has never been stamped (unchanged behaviour)", () => {
+    expect(isRecentlyActive(agent("never", "Never", undefined), NOW)).toBe(true);
+  });
+
+  it("filter and count keep exactly the same agents", () => {
+    const agents = new Map([
+      ["fresh", agent("fresh", "Fresh", 60_000)],
+      ["stale", agent("stale", "Stale", 10 * 60_000)],
+      ["sol", agent("sol", "Sol Docker", 10 * 60_000)],
+    ]);
+    const kept = filterRecentlyActive(agents, NOW);
+    expect([...kept.keys()].sort()).toEqual(["fresh", "sol"]);
+    expect(countRecentlyActive(agents, NOW)).toBe(kept.size);
   });
 });

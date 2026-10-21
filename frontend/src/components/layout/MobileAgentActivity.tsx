@@ -1,13 +1,9 @@
 "use client";
 
 import { Users } from "lucide-react";
-import { useShallow } from "zustand/react/shallow";
 import { useTranslation } from "@/hooks/useTranslation";
-import {
-  useGameStore,
-  selectAgents,
-  type BossAnimationState,
-} from "@/stores/gameStore";
+import { useRecentlyActiveAgents } from "@/hooks/useIdleSweep";
+import type { BossAnimationState } from "@/stores/gameStore";
 
 // ============================================================================
 // TYPES
@@ -32,8 +28,8 @@ export function MobileAgentActivity({
   const { t } = useTranslation();
   // Subscribe here (mobile-only) so the root page no longer holds the whole
   // agents Map subscription — keeps the desktop header/sidebars/modals off the
-  // per-frame animation re-render path (ARC-006).
-  const agents = useGameStore(useShallow(selectAgents));
+  // per-frame animation re-render path (ARC-006). Same idle sweep as the floor.
+  const agents = useRecentlyActiveAgents();
 
   return (
     <div className="flex-[2] bg-slate-950 border border-slate-800 rounded-lg overflow-hidden min-h-0">

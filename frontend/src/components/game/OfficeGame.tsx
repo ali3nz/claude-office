@@ -25,7 +25,6 @@ import {
   useEffect,
   useRef,
   useCallback,
-  useState,
   type DragEvent,
   type ReactNode,
 } from "react";
@@ -82,10 +81,9 @@ import {
 } from "@/systems/floorRegion";
 import { setBehavior, tickBehaviors, getOffset } from "@/systems/officeBehavior";
 import type { AgentAnimationState } from "@/stores/slices/types";
-import {
-  withPersistentIdentities,
-  PERSISTENT_IDS,
-} from "@/systems/persistentIdentities";
+import { withPersistentIdentities } from "@/systems/persistentIdentities";
+import { isRecentlyActive } from "@/systems/idleSweep";
+import { useIdleClock } from "@/hooks/useIdleSweep";
 import { coMark } from "@/utils/coMark";
 import {
   CANVAS_WIDTH,
@@ -400,36 +398,6 @@ function agentStateGlyph(agent: {
     default:
       return null;
   }
-}
-
-/**
- * Issue 226 R5 + 714 (operator: "idle agents are supposed to disappear after
- * 5 minutes"): idle agents leave the floor after 5 minutes without REAL
- * activity (issue 714: repeated unchanged room broadcasts no longer count as
- * activity). The two Sol gateway characters and Ghost Protocol are ALWAYS
- * present - they are infrastructure, not sessions.
- */
-const IDLE_TIMEOUT_MS = 5 * 60 * 1000;
-
-const ALWAYS_PRESENT = new Set([
-  "Sol Docker",
-  "Sol Webserver",
-  "Ghost Protocol",
-]);
-
-function isRecentlyActive(
-  agent: { id?: string; name: string | null; lastActivityAt?: number },
-  now: number,
-): boolean {
-  if (agent.name && ALWAYS_PRESENT.has(agent.name)) return true;
-  // Issue 226 R6h: robust persistent-identity detection - the ai-agents and
-  // the two gateway sessions never leave the floor even when their feed goes
-  // quiet (a missing identity once went missing because only the display name was checked).
-  // SOL review: enumerate the three persistent IDs exactly; an `ai-` prefix
-  // would make any future ai-* agent permanently immune to the idle sweep.
-  if (PERSISTENT_IDS.has(agent.id ?? "")) return true;
-  if (!agent.lastActivityAt) return true;
-  return now - agent.lastActivityAt < IDLE_TIMEOUT_MS;
 }
 
 /**
@@ -911,11 +879,7 @@ export function OfficeGame(): ReactNode {
 
   // Issue 226 R5 + 714: periodic re-render so agents idle >5 min leave the floor
   // without needing an unrelated store update to trigger a render.
-  const [idleTick, setIdleTick] = useState(() => Date.now());
-  useEffect(() => {
-    const id = window.setInterval(() => setIdleTick(Date.now()), 30_000);
-    return () => window.clearInterval(id);
-  }, []);
+  const idleTick = useIdleClock();
   const visibleAgents = useMemo(() => {
     const real = Array.from(agents.values()).filter((a) =>
       isRecentlyActive(a, idleTick),

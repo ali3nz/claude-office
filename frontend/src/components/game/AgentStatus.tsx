@@ -7,8 +7,7 @@
 
 "use client";
 
-import { useGameStore, selectAgents } from "@/stores/gameStore";
-import { useShallow } from "zustand/react/shallow";
+import { useRecentlyActiveAgents } from "@/hooks/useIdleSweep";
 import { useTranslation } from "@/hooks/useTranslation";
 import {
   Users,
@@ -84,7 +83,8 @@ function formatState(state: string): string {
 
 export function AgentStatus() {
   const { t } = useTranslation();
-  const agents = useGameStore(useShallow(selectAgents));
+  // Same idle sweep as the floor: agents with no real activity for 5 minutes drop out.
+  const agents = useRecentlyActiveAgents();
   const agentArray = Array.from(agents.values());
 
   // Sort by number for consistent ordering

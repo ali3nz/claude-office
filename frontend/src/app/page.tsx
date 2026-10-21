@@ -18,6 +18,7 @@ import { useWebSocketEvents } from "@/hooks/useWebSocketEvents";
 import { useSessions } from "@/hooks/useSessions";
 import { useSessionSwitch } from "@/hooks/useSessionSwitch";
 import { useFloorConfig } from "@/hooks/useFloorConfig";
+import { useRecentlyActiveCount } from "@/hooks/useIdleSweep";
 import {
   useGameStore,
   selectIsConnected,
@@ -81,6 +82,15 @@ const OfficeGame = dynamic(
 // PAGE COMPONENT
 // ============================================================================
 
+/**
+ * Header badge: agents that pass the idle sweep (the same set the floor draws).
+ * Isolated in its own component so the 30 s idle tick re-renders only this
+ * badge, not the page root (ARC-006: the root stays off the per-frame path).
+ */
+function RecentlyActiveAgentCount(): React.ReactNode {
+  return useRecentlyActiveCount();
+}
+
 export default function V2TestPage(): React.ReactNode {
   // ------------------------------------------------------------------
   // i18n
@@ -141,11 +151,6 @@ export default function V2TestPage(): React.ReactNode {
   // ------------------------------------------------------------------
   const isConnected = useGameStore(selectIsConnected);
   const debugMode = useGameStore(selectDebugMode);
-  // ARC-006: subscribe only to the count, not the whole agents Map. The page
-  // uses just `agents.size` (badge) — selecting a primitive means this root
-  // component re-renders only when an agent is added/removed, not every frame
-  // agents move (which was cascading re-renders through header/sidebar/modals).
-  const agentCount = useGameStore((s) => s.agents.size);
   const boss = useGameStore(selectBoss);
   const loadPersistedDebugSettings = useGameStore(
     (state) => state.loadPersistedDebugSettings,
@@ -476,7 +481,7 @@ export default function V2TestPage(): React.ReactNode {
               }`}
             />
             <span className="text-xs text-slate-400 font-mono">
-              {agentCount} {t("header.agents")}
+              <RecentlyActiveAgentCount /> {t("header.agents")}
             </span>
           </div>
         )}
