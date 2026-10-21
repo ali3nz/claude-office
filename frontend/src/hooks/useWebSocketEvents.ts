@@ -80,9 +80,13 @@ export function useWebSocketEvents({
   const addEventLog = useGameStore.getState().addEventLog;
 
   // ---- Reconnect bookkeeping (clears stale tracking state on a fresh socket) ----
+  // Transport reconnects deliberately keep lastSeenBubbleText. The replayed
+  // state carries every agent's current bubble; with the dedupe map cleared,
+  // each already-shown bubble was re-enqueued, and enqueueBubble counts that as
+  // activity, so every reconnect re-armed the 5-minute idle sweep for the whole
+  // floor. Session/room switches clear it in the lifecycle effect below.
   const handleReconnectReset = useCallback(() => {
     processedAgentsRef.current.clear();
-    lastSeenBubbleTextRef.current.clear();
     resetSpawnIndex();
   }, []);
 
@@ -245,6 +249,9 @@ export function useWebSocketEvents({
       return;
     }
 
+    // A session/room change starts a new bubble universe: forget the
+    // per-entity bubble dedupe here (not on every transport reconnect).
+    lastSeenBubbleTextRef.current.clear();
     controllerRef.current?.connect();
 
     return () => {

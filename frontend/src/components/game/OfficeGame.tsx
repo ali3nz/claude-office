@@ -909,28 +909,49 @@ export function OfficeGame(): ReactNode {
   // Use store's elevator state (controlled by state machine)
   const isElevatorOpen = elevatorState === "open";
 
-  // Calculate occupied desks
+  // Issue 226 R5 + 714: periodic re-render so agents idle >5 min leave the floor
+  // without needing an unrelated store update to trigger a render.
+  const [idleTick, setIdleTick] = useState(() => Date.now());
+  useEffect(() => {
+    const id = window.setInterval(() => setIdleTick(Date.now()), 30_000);
+    return () => window.clearInterval(id);
+  }, []);
+  const visibleAgents = useMemo(() => {
+    const real = Array.from(agents.values()).filter((a) =>
+      isRecentlyActive(a, idleTick),
+    );
+    // Issue 226 R8: the SHIPPED path now calls the same pure function that the
+    // controlled test exercises (scripts/persistent-identities.test.ts).
+    return withPersistentIdentities(
+      real,
+      persistentIdentityCache,
+      makePersistentSeed,
+    );
+  }, [agents, idleTick]);
+
+  // Calculate occupied desks. Issue 714 follow-up: derive from the same visible
+  // set the sprites use, so a swept agent releases its desk immediately.
   const occupiedDesks = useMemo(() => {
     const desks = new Set<number>();
-    for (const agent of agents.values()) {
+    for (const agent of visibleAgents) {
       if (agent.desk && agent.phase === "idle") {
         desks.add(agent.desk);
       }
     }
     return desks;
-  }, [agents]);
+  }, [visibleAgents]);
 
-  // Calculate desk tasks for marquee display
+  // Calculate desk tasks for marquee display (visible agents only, as above)
   const deskTasks = useMemo(() => {
     const tasks = new Map<number, string>();
-    for (const agent of agents.values()) {
+    for (const agent of visibleAgents) {
       if (agent.desk && agent.phase === "idle") {
         const label = agent.currentTask || agent.name || "";
         if (label) tasks.set(agent.desk, label);
       }
     }
     return tasks;
-  }, [agents]);
+  }, [visibleAgents]);
 
   // Desk count
   const deskCount = useMemo(() => {
@@ -982,26 +1003,6 @@ export function OfficeGame(): ReactNode {
   // Diagnostics (Sol C-first): first gate-open marker for evidence ordering.
   if (typeof window !== "undefined" && spritesLoaded) coSet("gate_open", "yes");
   if (typeof window !== "undefined" && spritesLoaded) coMark("gate-render");
-
-  // Issue 226 R5 + 714: periodic re-render so agents idle >5 min leave the floor
-  // without needing an unrelated store update to trigger a render.
-  const [idleTick, setIdleTick] = useState(() => Date.now());
-  useEffect(() => {
-    const id = window.setInterval(() => setIdleTick(Date.now()), 30_000);
-    return () => window.clearInterval(id);
-  }, []);
-  const visibleAgents = useMemo(() => {
-    const real = Array.from(agents.values()).filter((a) =>
-      isRecentlyActive(a, idleTick),
-    );
-    // Issue 226 R8: the SHIPPED path now calls the same pure function that the
-    // controlled test exercises (scripts/persistent-identities.test.ts).
-    return withPersistentIdentities(
-      real,
-      persistentIdentityCache,
-      makePersistentSeed,
-    );
-    }, [agents, idleTick]);
 
   // Desk/seat pool from the SAVED layout (persistent desk layout). Publish it
   // for the movement engine (getDeskPosition) which reads the module snapshot.
