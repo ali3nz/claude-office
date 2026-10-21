@@ -1,7 +1,61 @@
 """Tests for state machine logic."""
 
+from datetime import UTC, datetime, timedelta
+
 from app.core.state_machine import OfficePhase, StateMachine
-from app.models.agents import AgentState, BossState
+from app.models.agents import Agent, AgentState, BossState
+from app.models.events import (
+    EventType,
+    LifecycleEvent,
+    LifecycleEventData,
+    ToolEvent,
+    ToolEventData,
+)
+
+
+class TestRealActivityTimestamps:
+    def test_agent_work_event_sets_replayable_activity_timestamp(self) -> None:
+        sm = StateMachine()
+        sm.agents["worker"] = Agent(
+            id="worker", color="#fff", number=1, state=AgentState.WORKING
+        )
+        worked_at = datetime(2026, 10, 21, 8, 0, tzinfo=UTC)
+
+        sm.transition(
+            ToolEvent(
+                event_type=EventType.POST_TOOL_USE,
+                session_id="session",
+                timestamp=worked_at,
+                data=ToolEventData(agent_id="worker", tool_name="Read"),
+            )
+        )
+
+        assert sm.agents["worker"].last_activity_at == worked_at
+        assert sm.last_activity_at == worked_at
+        snapshot = sm.to_game_state("session")
+        assert snapshot.agents[0].last_activity_at == worked_at
+        assert snapshot.model_dump(mode="json", by_alias=True)["agents"][0]["lastActivityAt"]
+
+    def test_idle_status_event_does_not_renew_agent_or_session_activity(self) -> None:
+        sm = StateMachine()
+        older = datetime(2026, 10, 21, 7, 0, tzinfo=UTC)
+        sm.last_activity_at = older
+        sm.agents["worker"] = Agent(
+            id="worker", color="#fff", number=1, state=AgentState.IDLE,
+            last_activity_at=older,
+        )
+
+        sm.transition(
+            LifecycleEvent(
+                event_type=EventType.TEAMMATE_IDLE,
+                session_id="session",
+                timestamp=older + timedelta(hours=1),
+                data=LifecycleEventData(agent_id="worker"),
+            )
+        )
+
+        assert sm.last_activity_at == older
+        assert sm.agents["worker"].last_activity_at == older
 
 
 class TestStateMachineInit:

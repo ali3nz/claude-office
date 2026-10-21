@@ -90,6 +90,7 @@ export interface GameStore {
       name: string | null;
       currentTask: string | null;
       title?: string | null;
+      lastActivityAt?: unknown;
     },
   ) => void;
   updateAgentQueueInfo: (

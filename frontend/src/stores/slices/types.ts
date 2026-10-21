@@ -87,12 +87,7 @@ export interface AgentAnimationState {
   // Animation state
   isTyping: boolean; // True when agent is actively using tools
 
-  /**
-   * Issue 226 R5 (operator): wall-clock of the last NON-movement activity
-   * (state/task/typing/bubble). Idle agents leave the floor after 10 minutes
-   * without activity; a new event brings them back. Movement-only patches
-   * never refresh this, or an idle agent would never expire.
-   */
+  /** Backend event timestamp for the last real activity; never hydrated from client time. */
   lastActivityAt: number;
 }
 

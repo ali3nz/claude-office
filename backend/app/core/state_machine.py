@@ -43,6 +43,24 @@ from app.models.sessions import (
 
 logger = logging.getLogger(__name__)
 
+# Event timestamps that represent work/presence activity. TEAMMATE_IDLE, CLEANUP,
+# movement, and room snapshot broadcasts deliberately do not renew this watermark.
+_REAL_ACTIVITY_EVENT_TYPES = frozenset({
+    EventType.SESSION_START,
+    EventType.SESSION_END,
+    EventType.USER_PROMPT_SUBMIT,
+    EventType.PRE_TOOL_USE,
+    EventType.POST_TOOL_USE,
+    EventType.PERMISSION_REQUEST,
+    EventType.SUBAGENT_START,
+    EventType.SUBAGENT_INFO,
+    EventType.SUBAGENT_STOP,
+    EventType.AGENT_UPDATE,
+    EventType.STOP,
+    EventType.TASK_CREATED,
+    EventType.TASK_COMPLETED,
+})
+
 # ---------------------------------------------------------------------------
 # Module-level helpers
 # ---------------------------------------------------------------------------
@@ -614,6 +632,8 @@ class StateMachine:
     # remains the source of truth, so an evicted session replays on next access.
     # Not part of ``to_game_state`` output — internal eviction metadata only.
     last_event_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    # Replayable work watermark; unlike last_event_at, this excludes idle/status events.
+    last_activity_at: datetime | None = None
 
     # ---------------------------------------------------------------------------
     # Core methods
@@ -755,6 +775,19 @@ class StateMachine:
                     exc_info=True,
                 )
                 raise
+
+        if event.event_type in _REAL_ACTIVITY_EVENT_TYPES:
+            timestamp = event.timestamp
+            if timestamp.tzinfo is None:
+                timestamp = timestamp.replace(tzinfo=UTC)
+            if self.last_activity_at is None or timestamp > self.last_activity_at:
+                self.last_activity_at = timestamp
+            agent_id = getattr(event.data, "agent_id", None)
+            agent = self.agents.get(agent_id) if agent_id else None
+            if agent and (
+                agent.last_activity_at is None or timestamp > agent.last_activity_at
+            ):
+                agent.last_activity_at = timestamp
 
     def tool_to_thought(self, event: ToolEvent) -> BubbleContent:
         """Convert a tool use event to thought bubble content.

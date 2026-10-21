@@ -1,6 +1,8 @@
 # backend/tests/test_room_orchestrator.py
 """Tests for RoomOrchestrator: session merging, character types, kanban aggregation."""
 
+from datetime import UTC, datetime
+
 from app.core.room_orchestrator import (
     OFFICE_MAX_SEATED,
     RoomOrchestrator,
@@ -91,6 +93,7 @@ class TestTeamMerge:
         orch = RoomOrchestrator("room-1")
         orch.add_session("lead-sess", _make_sm(team_name="squad", is_lead=True))
         tm_sm = _make_sm(team_name="squad", teammate_name="implementer")
+        tm_sm.last_activity_at = datetime(2026, 10, 21, 8, 0, tzinfo=UTC)
         orch.add_session("tm-sess", tm_sm)
 
         state = orch.merge()
@@ -98,6 +101,7 @@ class TestTeamMerge:
         teammate_agents = [a for a in state.agents if a.character_type == "teammate"]
         assert len(teammate_agents) == 1
         assert teammate_agents[0].name == "implementer"
+        assert teammate_agents[0].last_activity_at == tm_sm.last_activity_at
 
     def test_lead_subagents_have_subagent_type(self) -> None:
         from app.models.agents import Agent

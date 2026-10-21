@@ -336,6 +336,7 @@ class RoomOrchestrator:
                                 state.boss.state, AgentState.WORKING
                             ),
                             desk=0,
+                            last_activity_at=entry.sm.last_activity_at,
                             bubble=state.boss.bubble,
                             current_task=state.boss.current_task,
                             title=office_title(entry.sm.display_name),
@@ -463,6 +464,7 @@ class RoomOrchestrator:
                     current_task=tm_state.boss.current_task,
                     character_type="teammate",
                     parent_session_id=session_id,
+                    last_activity_at=entry.sm.last_activity_at,
                 )
             )
 

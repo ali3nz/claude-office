@@ -182,6 +182,14 @@ describe("assignDeskSeats", () => {
     expect(map.get("n")).toBe(1);
   });
 
+  it("reuses a departing agent's desk for the next arrival", () => {
+    const first = assignDeskSeats([{ id: "departing", name: "Departing" }], PINNED, 2);
+    expect(first.get("departing")).toBe(1);
+
+    const afterDeparture = assignDeskSeats([{ id: "arrival", name: "Arrival" }], PINNED, 2);
+    expect(afterDeparture.get("arrival")).toBe(1);
+  });
+
   it("keeps a valid backend seat when it is free", () => {
     const map = assignDeskSeats(
       [

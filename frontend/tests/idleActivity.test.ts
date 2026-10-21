@@ -104,7 +104,7 @@ describe("idle clock (issue 714)", () => {
     expect(clockOf("A")).toBe(PAST);
   });
 
-  it("a changed non-movement value refreshes the clock", () => {
+  it("metadata changes and bubble display do not fabricate activity", () => {
     useGameStore.getState().addAgent(makeAgent("A", { name: "Alice" }), ORIGIN);
     pinClock("A", PAST);
 
@@ -114,17 +114,25 @@ describe("idle clock (issue 714)", () => {
       currentTask: null,
       title: null,
     });
-
-    expect(clockOf("A")).toBeGreaterThan(PAST);
-  });
-
-  it("a new bubble refreshes the clock", () => {
-    useGameStore.getState().addAgent(makeAgent("A", { name: "Alice" }), ORIGIN);
-    pinClock("A", PAST);
-
     useGameStore.getState().enqueueBubble("A", BUBBLE);
 
-    expect(clockOf("A")).toBeGreaterThan(PAST);
+    expect(clockOf("A")).toBe(PAST);
+  });
+
+  it("a backend real-activity watermark renews the clock", () => {
+    useGameStore.getState().addAgent(makeAgent("A", { name: "Alice" }), ORIGIN);
+    pinClock("A", PAST);
+    const activityAt = new Date(PAST + 60_000).toISOString();
+
+    useGameStore.getState().updateAgentMeta("A", {
+      backendState: "working",
+      name: "Alice",
+      currentTask: null,
+      title: null,
+      lastActivityAt: activityAt,
+    });
+
+    expect(clockOf("A")).toBe(Date.parse(activityAt));
   });
 
   it("movement writes never refresh the clock", () => {
@@ -150,7 +158,11 @@ describe("reconnect replay does not re-arm the idle clock", () => {
   const MIN5 = 5 * 60 * 1000;
 
   /** One backend agent at its desk, showing a tool bubble. */
-  function snapshot(sessionId: string, text: string | null): GameState {
+  function snapshot(
+    sessionId: string,
+    text: string | null,
+    lastActivityAt?: string,
+  ): GameState {
     return {
       sessionId,
       boss: { state: "idle", currentTask: null, bubble: null },
@@ -174,6 +186,7 @@ describe("reconnect replay does not re-arm the idle clock", () => {
           state: "idle",
           name: "Quiet session",
           desk: 3,
+          ...(lastActivityAt ? { lastActivityAt } : {}),
           ...(text === null ? {} : { bubble: { type: "speech", text } }),
         } as unknown as Agent,
       ],
@@ -205,6 +218,14 @@ describe("reconnect replay does not re-arm the idle clock", () => {
     vi.setSystemTime(T0);
   });
 
+  it("hydration preserves the backend activity age instead of stamping client now", () => {
+    const staleAt = new Date(T0 - MIN5).toISOString();
+    reconcileState(snapshot("S1", null, staleAt), newCtx("S1"));
+    const hydrated = useGameStore.getState().agents.get("off-quiet");
+    expect(hydrated?.lastActivityAt).toBe(Date.parse(staleAt));
+    expect(isRecentlyActive(hydrated!, T0)).toBe(false);
+  });
+
   afterEach(() => {
     vi.useRealTimers();
   });
@@ -215,15 +236,16 @@ describe("reconnect replay does not re-arm the idle clock", () => {
     settleAtDesk("off-quiet");
 
     vi.setSystemTime(T0 + 30_000);
-    reconcileState(snapshot("S1", "read"), ctx); // first display: real activity
-    const shownAt = clockOf("off-quiet");
+    reconcileState(snapshot("S1", "read", new Date(T0 + 30_000).toISOString()), ctx);
+    const shownAt = clockOf("off-quiet")!
     expect(shownAt).toBe(T0 + 30_000);
     useGameStore.getState().advanceBubble("off-quiet"); // bubble finished
 
     // Socket reconnects 5 minutes later; the server replays the same bubble.
     vi.setSystemTime(T0 + 30_000 + MIN5);
-    reconcileState(snapshot("S1", "read"), ctx);
+    reconcileState(snapshot("S1", "read", new Date(shownAt).toISOString()), ctx);
     expect(clockOf("off-quiet")).toBe(shownAt);
+    expect(isRecentlyActive(useGameStore.getState().agents.get("off-quiet")!, T0 + 30_000 + MIN5)).toBe(false);
   });
 
   it("a changed bubble after the reconnect still counts as activity", () => {
@@ -231,11 +253,11 @@ describe("reconnect replay does not re-arm the idle clock", () => {
     reconcileState(snapshot("S1", null), ctx);
     settleAtDesk("off-quiet");
     vi.setSystemTime(T0 + 30_000);
-    reconcileState(snapshot("S1", "read"), ctx);
+    reconcileState(snapshot("S1", "read", new Date(T0 + 30_000).toISOString()), ctx);
     useGameStore.getState().advanceBubble("off-quiet");
 
     vi.setSystemTime(T0 + 60_000);
-    reconcileState(snapshot("S1", "grep"), ctx);
+    reconcileState(snapshot("S1", "grep", new Date(T0 + 60_000).toISOString()), ctx);
     expect(clockOf("off-quiet")).toBe(T0 + 60_000);
   });
 
@@ -255,9 +277,13 @@ describe("reconnect replay does not re-arm the idle clock", () => {
   }
 
   /** Delivers a state_update exactly as the socket would. */
-  function deliver(controller: { opts: WebSocketControllerOptions }, text: string | null): void {
+  function deliver(
+    controller: { opts: WebSocketControllerOptions },
+    text: string | null,
+    lastActivityAt?: string,
+  ): void {
     controller.opts.onMessage({
-      data: JSON.stringify({ type: "state_update", state: snapshot("S1", text) }),
+      data: JSON.stringify({ type: "state_update", state: snapshot("S1", text, lastActivityAt) }),
     } as unknown as MessageEvent);
   }
 
@@ -267,14 +293,14 @@ describe("reconnect replay does not re-arm the idle clock", () => {
     settleAtDesk("off-quiet");
 
     vi.setSystemTime(T0 + 30_000);
-    deliver(controller, "read"); // first display: real activity
-    const shownAt = clockOf("off-quiet");
+    deliver(controller, "read", new Date(T0 + 30_000).toISOString());
+    const shownAt = clockOf("off-quiet")!
     expect(shownAt).toBe(T0 + 30_000);
     useGameStore.getState().advanceBubble("off-quiet");
 
     vi.setSystemTime(T0 + 30_000 + MIN5);
     controller.opts.onReconnectReset(); // WebSocketController calls this from onopen
-    deliver(controller, "read"); // the server replays the same bubble
+    deliver(controller, "read", new Date(shownAt).toISOString()); // same event watermark
     expect(clockOf("off-quiet")).toBe(shownAt);
   });
 
@@ -283,12 +309,12 @@ describe("reconnect replay does not re-arm the idle clock", () => {
     deliver(controller, null);
     settleAtDesk("off-quiet");
     vi.setSystemTime(T0 + 30_000);
-    deliver(controller, "read");
+    deliver(controller, "read", new Date(T0 + 30_000).toISOString());
     useGameStore.getState().advanceBubble("off-quiet");
 
     vi.setSystemTime(T0 + 60_000);
     controller.opts.onReconnectReset();
-    deliver(controller, "grep");
+    deliver(controller, "grep", new Date(T0 + 60_000).toISOString());
     expect(clockOf("off-quiet")).toBe(T0 + 60_000);
   });
 });
@@ -310,14 +336,17 @@ describe("idle sweep predicate shared by floor, sidebars and header", () => {
   });
 
   it("keeps the Sol gateways and Ghost Protocol by name or persistent id", () => {
-    const persistentId = [...PERSISTENT_IDS][0];
-    expect(isRecentlyActive(agent("x", "Sol Docker", 60 * 60_000), NOW)).toBe(true);
-    expect(isRecentlyActive(agent("x", "Ghost Protocol", 60 * 60_000), NOW)).toBe(true);
-    expect(isRecentlyActive(agent(persistentId, "Plain", 60 * 60_000), NOW)).toBe(true);
+    expect(isRecentlyActive(agent("gateway-dockerhost", "Sol Docker", 60 * 60_000), NOW)).toBe(true);
+    expect(isRecentlyActive(agent("gateway-webserver", "Sol Webserver", 60 * 60_000), NOW)).toBe(true);
+    expect(isRecentlyActive(agent("ai-companion", "Ghost Protocol", 60 * 60_000), NOW)).toBe(true);
+    expect(isRecentlyActive(agent("legacy-ghost", "Ghost", 60 * 60_000), NOW)).toBe(true);
+    for (const persistentId of PERSISTENT_IDS) {
+      expect(isRecentlyActive(agent(persistentId, "Plain", 60 * 60_000), NOW)).toBe(true);
+    }
   });
 
-  it("keeps an agent that has never been stamped (unchanged behaviour)", () => {
-    expect(isRecentlyActive(agent("never", "Never", undefined), NOW)).toBe(true);
+  it("fails closed for agents without an authoritative activity timestamp", () => {
+    expect(isRecentlyActive(agent("never", "Never", undefined), NOW)).toBe(false);
   });
 
   it("filter and count keep exactly the same agents", () => {

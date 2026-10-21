@@ -19,6 +19,7 @@ export const IDLE_CLOCK_MS = 30_000;
 const ALWAYS_PRESENT = new Set([
   "Sol Docker",
   "Sol Webserver",
+  "Ghost",
   "Ghost Protocol",
 ]);
 
@@ -36,7 +37,7 @@ export function isRecentlyActive(agent: SweepableAgent, now: number): boolean {
   // SOL review: enumerate the three persistent IDs exactly; an `ai-` prefix
   // would make any future ai-* agent permanently immune to the idle sweep.
   if (PERSISTENT_IDS.has(agent.id ?? "")) return true;
-  if (!agent.lastActivityAt) return true;
+  if (!Number.isFinite(agent.lastActivityAt) || !agent.lastActivityAt) return false;
   return now - agent.lastActivityAt < IDLE_TIMEOUT_MS;
 }
 

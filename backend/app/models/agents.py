@@ -1,3 +1,4 @@
+from datetime import datetime
 from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict
@@ -67,6 +68,8 @@ class Agent(BaseModel):
     character_type: str | None = None  # "lead" | "teammate" | "subagent"
     parent_session_id: str | None = None  # session that owns this character
     parent_id: str | None = None  # for subagents: parent lead/teammate id
+    # Timestamp of the most recent real event for this agent; survives snapshot/replay.
+    last_activity_at: datetime | None = None
 
 
 class Boss(BaseModel):
