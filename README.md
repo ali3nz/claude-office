@@ -25,6 +25,10 @@
 
 ## Screenshots
 
+This fork's live office — idle agents expire after 5 minutes and only active agents (plus always-on ones) stay on the floor, so the room reflects reality instead of a session graveyard:
+
+![Live office of this fork — 8 agents, idle expired, clean floor](screenshots/ali3nz-office-live.png)
+
 The **Command Center** gathers the boss of every live terminal into one cross-session office — at a glance you can see which terminals need you, which are working, and which are done:
 
 ![Command Center](https://raw.githubusercontent.com/paulrobello/claude-office/main/screenshots/sc_command_center.png)
