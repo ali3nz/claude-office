@@ -70,7 +70,7 @@ GATEWAY_WHITELIST = {
 }
 GATEWAY_EVENTS = frozenset(["session_start", "tool_start", "tool_end"])
 
-# Freebuff Desktop threads (issue 226 R2): the agenthome presence watcher also
+# Freebuff Desktop threads: the agenthome presence watcher also
 # reports live Freebuff chat threads as chat-fb-* sessions — the ids the
 # desktop itself uses for its threads. Exactly those sids are accepted
 # outside the gateway whitelist, so feed free text stays bounded: only the
@@ -398,7 +398,7 @@ def freebuff_display_name(label):
 def translate_freebuff(line, live_agents, bootstraps=None):
     """Map one agenthome Freebuff Desktop thread line to office vocab.
 
-    Accepted only for chat-fb-* thread ids (issue 226 R2): the two catgpt
+    Accepted only for chat-fb-* thread ids: the two catgpt
     gateways remain the only other agenthome identity (issue 221 S3), and
     everything else from the agenthome feed is still dropped. Free text is
     bounded exactly like the openchamber/claude feeds: only the sanitized
@@ -645,9 +645,16 @@ def run_once(state):
                 item = json.loads(raw)
             except ValueError:
                 continue
+            fb_raw_sid = None
+            fb_had_bootstrap = False
             if source == "kit":
                 env, key, sid = translate_kit(item, live)
             elif source == "ag":
+                raw_ag_sid = str(item.get("session_id") or "")
+                if raw_ag_sid.startswith(FREEBUFF_SID_PREFIX):
+                    fb_raw_sid = raw_ag_sid
+                    fb_had_bootstrap = bool(
+                        state.setdefault("fbb", {}).get(fb_raw_sid))
                 env, key, sid = translate_gateway(item, set(state.get("gateways", {})))
                 if env is None and key is None:
                     env, key, sid = translate_freebuff(
@@ -670,6 +677,11 @@ def run_once(state):
                 time.sleep(POST_DELAY)
                 posted += 1
             if post_failed:
+                # translate_freebuff marks the first pulse before posting.
+                # If the event batch fails, the cursor retries the line; roll
+                # that marker back so its session_start bootstrap is retried too.
+                if fb_raw_sid and not fb_had_bootstrap:
+                    state.setdefault("fbb", {}).pop(fb_raw_sid, None)
                 advanced -= 1
                 failed += 1
                 break
@@ -689,6 +701,8 @@ def run_once(state):
                     live_agents[str(item.get("session_id") or "x")] = sid
             if env["event_type"] == "session_end":
                 live.pop(sid, None)
+                if fb_raw_sid:
+                    state.setdefault("fbb", {}).pop(fb_raw_sid, None)
             if source == "kit" and item.get("transition") in ("run_completed", "run_failed"):
                 run_no = item.get("runNumber")
                 done = item.get("transition") == "run_completed"
@@ -719,6 +733,8 @@ def run_once(state):
 
 
 def selftest():
+    global FEED_KIT, FEED_OC, FEED_FB, FEED_AG, POST_DELAY
+    global run_ai_agents, post_envelope
     live = {}
     env, key, sid = translate_kit({"transition": "case_started", "runNumber": 7,
                                    "caseId": "demo", "caseRev": 1,
@@ -795,7 +811,7 @@ def selftest():
                  "ts": 1790831909.0, "event": "tool_start"}
         envX, keyX, sidX = translate_gateway(other)
         assert envX is None and keyX is None and sidX is None, (sid, envX, keyX, sidX)
-    # --- Freebuff Desktop threads (issue 226 R2) --------------------------
+    # --- Freebuff Desktop thread translation ------------------------------
     fb = {"session_id": "chat-fb-42a6f8ae", "platform": "freebuff",
           "ts": 1792732511.0, "event": "session_start",
           "label": 'Buffy CHAT - "Did sol sign off on all five changes?"',
@@ -833,7 +849,47 @@ def selftest():
                  "ts": 1792734001.0, "event": "custom_ping"}):
         fbx, fkx, fsx = translate_freebuff(bad, {})
         assert fbx is None and fkx is None and fsx is None, (bad, fbx)
-    print("selftest: 7 groups OK")
+    # Bootstrap markers must roll back if a multi-envelope batch fails, then
+    # clear when the thread ends. Exercise run_once with a two-line temp feed.
+    import tempfile
+    saved = (FEED_KIT, FEED_OC, FEED_FB, FEED_AG, POST_DELAY, run_ai_agents,
+             post_envelope)
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            empty = os.path.join(tmp, "empty.jsonl")
+            agfeed = os.path.join(tmp, "agenthome.jsonl")
+            retry_sid = "chat-fb-retry"
+            lines = [
+                {"session_id": retry_sid, "platform": "freebuff",
+                 "ts": 1792732520.0, "event": "tool_start", "tool_name": "chat",
+                 "activity": "working", "label": "Buffy CHAT - retry title"},
+                {"session_id": retry_sid, "platform": "freebuff",
+                 "ts": 1792732521.0, "event": "session_end",
+                 "label": "Buffy CHAT - retry title"},
+            ]
+            with open(agfeed, "w", encoding="utf-8") as fh:
+                for ev in lines:
+                    fh.write(json.dumps(ev) + "\n")
+            FEED_KIT = FEED_OC = FEED_FB = empty
+            FEED_AG = agfeed
+            POST_DELAY = 0
+            run_ai_agents = lambda _state: (0, 0)
+            state = {"cursors": {}, "sent": [], "live": {}, "gateways": {}}
+            outcomes = iter([True, False])
+            post_envelope = lambda _env: next(outcomes)
+            _, _, failed = run_once(state)
+            assert failed == 1, (failed, state)
+            assert state["cursors"][agfeed] == 0, state["cursors"]
+            assert not state.get("fbb"), state.get("fbb")
+            post_envelope = lambda _env: True
+            posted, _, failed = run_once(state)
+            assert posted == 3 and failed == 0, (posted, failed)
+            assert state["cursors"][agfeed] == 2, state["cursors"]
+            assert retry_sid not in state["fbb"], state["fbb"]
+    finally:
+        (FEED_KIT, FEED_OC, FEED_FB, FEED_AG, POST_DELAY, run_ai_agents,
+         post_envelope) = saved
+    print("selftest: 8 groups OK")
     return 0
 
 
