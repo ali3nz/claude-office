@@ -12,7 +12,7 @@ from __future__ import annotations
 import logging
 import re
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
 from app.models.agents import Agent, AgentState, BossState, OfficeState
@@ -40,6 +40,19 @@ OFFICE_DESK_COUNT = OFFICE_MAX_SEATED
 # taken, arrivals stand here instead of spawning desks or doubling up.
 # Must match OVERFLOW_SPOTS in frontend/src/themes/w17ant-spots.ts.
 OFFICE_OVERFLOW_SPOTS = 6
+
+# Operator requirement: an agent with no real activity for five minutes leaves
+# the floor. The frontend enforces the same window, but doing it here as well
+# keeps a stale browser bundle (and the WebSocket payload) from resurrecting
+# old agents. The three infrastructure identities never expire.
+OFFICE_IDLE_TIMEOUT = timedelta(minutes=5)
+PERSISTENT_AGENT_SEEDS: tuple[tuple[str, str], ...] = (
+    ("gateway-dockerhost", "Sol Docker"),
+    ("gateway-webserver", "Sol Webserver"),
+    ("ai-companion", "Ghost Protocol"),
+)
+PERSISTENT_AGENT_IDS = frozenset(agent_id for agent_id, _ in PERSISTENT_AGENT_SEEDS)
+PERSISTENT_AGENT_NAMES = frozenset({"Ghost", *(name for _, name in PERSISTENT_AGENT_SEEDS)})
 
 _RUN_ID_RE = re.compile(r"^orch-(\d{1,4})-([a-z]+)")
 
@@ -92,6 +105,35 @@ def office_title(display_name: str | None) -> str | None:
     """Full conversation name for the floor label (issue 360)."""
     title = str(display_name or "").strip()
     return title[:80] or None
+
+
+def _is_persistent_identity(agent: Agent, session_id: str) -> bool:
+    """The three infrastructure characters that are always on the floor."""
+    if agent.id in PERSISTENT_AGENT_IDS:
+        return True
+    if agent.name in PERSISTENT_AGENT_NAMES:
+        return True
+    return session_id == "ai-companion" or any(
+        key in session_id for key in GATEWAY_NAMES
+    )
+
+
+def _is_recently_active(agent: Agent, session_id: str, cutoff: datetime) -> bool:
+    """Whether *agent* should still be drawn on the merged office floor.
+
+    A missing watermark predates activity tracking (or is an agent whose first
+    work event has not arrived yet), so it is kept rather than hidden. Known
+    timestamps older than *cutoff* are swept even if the browser is running an
+    older bundle that never learned the idle rule.
+    """
+    if _is_persistent_identity(agent, session_id):
+        return True
+    last_activity = agent.last_activity_at
+    if last_activity is None:
+        return True
+    if last_activity.tzinfo is None:
+        last_activity = last_activity.replace(tzinfo=UTC)
+    return last_activity >= cutoff
 
 
 _TEAMMATE_COLORS = [
@@ -257,6 +299,7 @@ class RoomOrchestrator:
         """
         first_entry = next(iter(self._sessions.values()))
         first_state = first_entry.sm.to_game_state(first_entry.session_id)
+        cutoff = datetime.now(UTC) - OFFICE_IDLE_TIMEOUT
 
         # Stable desk assignment (issue 246 follow-up): each character keeps
         # the SAME workstation for as long as it is present; a new arrival
@@ -281,7 +324,14 @@ class RoomOrchestrator:
         )
         for session_id, entry in ordered:
             state = entry.sm.to_game_state(session_id)
-            session_agents = list(state.agents)
+            # Server-side half of the 5-minute idle sweep. The frontend still
+            # runs its wall-clock sweep, but filtering here means an always-on
+            # display with a cached bundle cannot keep yesterday's agents.
+            session_agents = [
+                agent
+                for agent in state.agents
+                if _is_recently_active(agent, session_id, cutoff)
+            ]
             is_gateway = any(k in session_id for k in GATEWAY_NAMES)
             if session_agents:
                 for agent in session_agents:
@@ -313,38 +363,60 @@ class RoomOrchestrator:
                         )
                     )
             else:
-                present.append(
-                    (
-                        f"off-{session_id}",
-                        Agent(
-                            # Issue 714 follow-up 3: the FULL session id. The
-                            # first 10 characters collided across sessions
-                            # started together and collapsed them into one
-                            # character on one desk.
-                            id=f"off-{session_id}",
-                            name=office_session_name(
-                                session_id, entry.sm.display_name
-                            ),
-                            # Placeholder colour: the seat/colour pass below
-                            # assigns the stable per-desk teammate colour.
-                            # Agent.color is a required field, so it must be
-                            # supplied here (issue 246 regression: dropping it
-                            # raised on every office merge -> WS DISCONNECTED).
-                            color=_TEAMMATE_COLORS[0],
-                            number=0,
-                            state=_BOSS_TO_AGENT.get(
-                                state.boss.state, AgentState.WORKING
-                            ),
-                            desk=0,
-                            last_activity_at=entry.sm.last_activity_at,
-                            bubble=state.boss.bubble,
-                            current_task=state.boss.current_task,
-                            title=office_title(entry.sm.display_name),
-                            character_type="teammate",
-                            parent_session_id=session_id,
-                        ),
-                    )
+                placeholder = Agent(
+                    # Issue 714 follow-up 3: the FULL session id. The
+                    # first 10 characters collided across sessions
+                    # started together and collapsed them into one
+                    # character on one desk.
+                    id=f"off-{session_id}",
+                    name=office_session_name(
+                        session_id, entry.sm.display_name
+                    ),
+                    # Placeholder colour: the seat/colour pass below
+                    # assigns the stable per-desk teammate colour.
+                    # Agent.color is a required field, so it must be
+                    # supplied here (issue 246 regression: dropping it
+                    # raised on every office merge -> WS DISCONNECTED).
+                    color=_TEAMMATE_COLORS[0],
+                    number=0,
+                    state=_BOSS_TO_AGENT.get(
+                        state.boss.state, AgentState.WORKING
+                    ),
+                    desk=0,
+                    last_activity_at=entry.sm.last_activity_at,
+                    bubble=state.boss.bubble,
+                    current_task=state.boss.current_task,
+                    title=office_title(entry.sm.display_name),
+                    character_type="teammate",
+                    parent_session_id=session_id,
                 )
+                if _is_recently_active(placeholder, session_id, cutoff):
+                    present.append((f"off-{session_id}", placeholder))
+
+        # The three infrastructure identities are persistent: their feed can
+        # go quiet (or the session may not be restored yet after a restart),
+        # but they never leave the floor. Synthesize a quiet stand-in when no
+        # live/original character is present; the frontend uses the same ids
+        # and names, so the live state replaces it without a duplicate.
+        present_ids = {agent.id for _, agent in present}
+        present_names = {agent.name for _, agent in present}
+        for agent_id, name in PERSISTENT_AGENT_SEEDS:
+            if agent_id in present_ids or name in present_names:
+                continue
+            present.append(
+                (
+                    agent_id,
+                    Agent(
+                        id=agent_id,
+                        name=name,
+                        color="#64748b",
+                        number=0,
+                        state=AgentState.IDLE,
+                        desk=0,
+                        last_activity_at=None,
+                    ),
+                )
+            )
 
         # Release the desks of characters that are gone, then give each new
         # arrival the lowest desk number nobody holds. Issue 714 follow-up 3:

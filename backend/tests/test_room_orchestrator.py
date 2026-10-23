@@ -1,10 +1,12 @@
 # backend/tests/test_room_orchestrator.py
 """Tests for RoomOrchestrator: session merging, character types, kanban aggregation."""
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from app.core.room_orchestrator import (
+    OFFICE_IDLE_TIMEOUT,
     OFFICE_MAX_SEATED,
+    PERSISTENT_AGENT_IDS,
     RoomOrchestrator,
     build_overview,
     office_session_name,
@@ -158,6 +160,134 @@ class TestOfficeMergeAgentlessSession:
         teammates = [a for a in state.agents if a.character_type == "teammate"]
         assert len(teammates) == 1
         assert teammates[0].color  # required field must be populated
+
+
+class TestOfficeIdleSweep:
+    """Issue 714 / operator requirement: five idle minutes clears an agent.
+
+    The backend applies the same predicate as the frontend so an always-on
+    display cannot keep stale agents alive with a cached bundle.
+    """
+
+    def test_agent_stale_beyond_timeout_is_swept(self) -> None:
+        orch = RoomOrchestrator("office")
+        sm = _make_sm()
+        stale_at = datetime.now(UTC) - OFFICE_IDLE_TIMEOUT - timedelta(seconds=1)
+        sm.last_activity_at = stale_at
+        sm.agents["stale"] = Agent(
+            id="stale",
+            name="Worker",
+            color="#fff",
+            number=0,
+            state=AgentState.IDLE,
+            last_activity_at=stale_at,
+        )
+        orch.add_session("oc-ses_stale", sm)
+
+        state = orch.merge()
+        assert state is not None
+        assert all(a.id != "stale" for a in state.agents)
+
+    def test_agent_inside_timeout_is_kept(self) -> None:
+        orch = RoomOrchestrator("office")
+        sm = _make_sm()
+        fresh_at = datetime.now(UTC) - OFFICE_IDLE_TIMEOUT + timedelta(minutes=1)
+        sm.last_activity_at = fresh_at
+        sm.agents["fresh"] = Agent(
+            id="fresh",
+            name="Worker",
+            color="#fff",
+            number=0,
+            state=AgentState.WORKING,
+            last_activity_at=fresh_at,
+        )
+        orch.add_session("oc-ses_fresh", sm)
+
+        state = orch.merge()
+        assert state is not None
+        assert any(a.id == "fresh" for a in state.agents)
+
+    def test_persistent_identities_never_expire(self) -> None:
+        orch = RoomOrchestrator("office")
+        sm = _make_sm()
+        old = datetime.now(UTC) - timedelta(days=1)
+        sm.last_activity_at = old
+        sm.agents = {
+            "gateway-dockerhost": Agent(
+                id="gateway-dockerhost",
+                name="Sol Docker",
+                color="#fff",
+                number=0,
+                state=AgentState.IDLE,
+                last_activity_at=old,
+            ),
+            "gateway-webserver": Agent(
+                id="gateway-webserver",
+                name="Sol Webserver",
+                color="#fff",
+                number=1,
+                state=AgentState.IDLE,
+                last_activity_at=old,
+            ),
+            "ai-companion": Agent(
+                id="ai-companion",
+                name="Ghost Protocol",
+                color="#fff",
+                number=2,
+                state=AgentState.IDLE,
+                last_activity_at=old,
+            ),
+        }
+        orch.add_session("oc-ses_persistent", sm)
+
+        state = orch.merge()
+        assert state is not None
+        ids = {a.id for a in state.agents}
+        assert ids == {"gateway-dockerhost", "gateway-webserver", "ai-companion"}
+
+    def test_stale_agentless_session_is_swept(self) -> None:
+        orch = RoomOrchestrator("office")
+        sm = _make_sm()
+        sm.last_activity_at = datetime.now(UTC) - OFFICE_IDLE_TIMEOUT - timedelta(seconds=1)
+        orch.add_session("oc-ses_stale_agentless", sm)
+
+        state = orch.merge()
+        assert state is not None
+        # Only the three always-present identities remain.
+        assert {a.id for a in state.agents} == PERSISTENT_AGENT_IDS
+
+    def test_missing_persistent_sessions_are_synthesized(self) -> None:
+        # After a restart a gateway session may not have been restored yet.
+        # The floor must still show the two Sol characters and Ghost Protocol.
+        orch = RoomOrchestrator("office")
+        sm = _make_sm()
+        sm.last_activity_at = datetime.now(UTC) - OFFICE_IDLE_TIMEOUT - timedelta(seconds=1)
+        orch.add_session("oc-ses_fresh_only", sm)
+
+        state = orch.merge()
+        assert state is not None
+        by_name = {a.name: a.id for a in state.agents}
+        assert by_name["Sol Docker"] == "gateway-dockerhost"
+        assert by_name["Sol Webserver"] == "gateway-webserver"
+        assert by_name["Ghost Protocol"] == "ai-companion"
+
+    def test_unknown_activity_timestamp_is_not_hidden(self) -> None:
+        # Older state (or a session whose first work event has not arrived) has
+        # no watermark; do not make a new agent vanish before it can be seen.
+        orch = RoomOrchestrator("office")
+        sm = _make_sm()
+        sm.agents["unknown"] = Agent(
+            id="unknown",
+            name="Worker",
+            color="#fff",
+            number=0,
+            state=AgentState.WORKING,
+        )
+        orch.add_session("oc-ses_unknown", sm)
+
+        state = orch.merge()
+        assert state is not None
+        assert any(a.id == "unknown" for a in state.agents)
 
 
 class TestKanbanAggregation:
@@ -351,9 +481,14 @@ class TestOfficeNaming360:
             orch.add_session(f"oc-ses_{i:02d}", sm)
         state = orch.merge()
         assert state is not None
-        desks = sorted(a.desk for a in state.agents if a.desk)
+        desks = sorted(
+            a.desk
+            for a in state.agents
+            if a.desk and a.id not in PERSISTENT_AGENT_IDS
+        )
         # No backend ceiling: every subagent gets its own desk number. Seat
-        # capacity is enforced by the frontend seat policy.
+        # capacity is enforced by the frontend seat policy. The three
+        # synthesized persistent stand-ins are excluded from this pool count.
         assert len(desks) == count
         assert len(set(desks)) == len(desks)
         assert max(desks) == count
