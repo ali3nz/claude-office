@@ -76,7 +76,7 @@ GATEWAY_EVENTS = frozenset(["session_start", "tool_start", "tool_end"])
 # outside the gateway whitelist, so feed free text stays bounded: only the
 # thread-title label crosses, through the display-name sanitizer, with the
 # fixed "Buffy CHAT - " wrapper stripped; tool commands/preview/detail never
-# translate regardless (freebuff.py selftest asserts the redaction).
+# translate regardless (the bridge selftest asserts the redaction).
 FREEBUFF_SID_PREFIX = "chat-fb-"
 FREEBUFF_EVENTS = frozenset(["session_start", "tool_start", "tool_end",
                              "approval_request", "session_end"])
@@ -379,7 +379,7 @@ def translate_gateway(line, seen=None):
 
 
 def freebuff_display_name(label):
-    """Presentation-only thread title for the floor (issue 226 R2).
+    """Presentation-only thread title for a Freebuff Desktop thread.
 
     The watcher label wraps the Freebuff thread title in the fixed
     "Buffy CHAT - " marker. Only that constant wrapper, leading/trailing
