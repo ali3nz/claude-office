@@ -70,6 +70,19 @@ GATEWAY_WHITELIST = {
 }
 GATEWAY_EVENTS = frozenset(["session_start", "tool_start", "tool_end"])
 
+# Freebuff Desktop threads (issue 226 R2): the agenthome presence watcher also
+# reports live Freebuff chat threads as chat-fb-* sessions — the ids the
+# desktop itself uses for its threads. Exactly those sids are accepted
+# outside the gateway whitelist, so feed free text stays bounded: only the
+# thread-title label crosses, through the display-name sanitizer, with the
+# fixed "Buffy CHAT - " wrapper stripped; tool commands/preview/detail never
+# translate regardless (freebuff.py selftest asserts the redaction).
+FREEBUFF_SID_PREFIX = "chat-fb-"
+FREEBUFF_EVENTS = frozenset(["session_start", "tool_start", "tool_end",
+                             "approval_request", "session_end"])
+FREEBUFF_LABEL_PREFIX = "Buffy CHAT - "
+FREEBUFF_NAME_TAG = "Buffy: "
+
 STATE_FILE = os.path.join(STATE_DIR, "bridge-state.json")
 
 KIT_START = frozenset(["run_allocated", "case_started", "agent_allocated"])
@@ -365,6 +378,72 @@ def translate_gateway(line, seen=None):
     return (envs if len(envs) != 1 else envs[0]), key, sid
 
 
+def freebuff_display_name(label):
+    """Presentation-only thread title for the floor (issue 226 R2).
+
+    The watcher label wraps the Freebuff thread title in the fixed
+    "Buffy CHAT - " marker. Only that constant wrapper, leading/trailing
+    padding and wrapping quotes are removed, capped by the same sanitizer
+    (issue 226 R1). The office's session name budget does the final cut, so
+    the floor shows the actual task instead of the constant wrapper. No
+    prompt/command/preview content is parsed or propagated.
+    """
+    txt = sanitize_display_name(label)
+    if txt.startswith(FREEBUFF_LABEL_PREFIX):
+        txt = txt[len(FREEBUFF_LABEL_PREFIX):]
+    txt = txt.strip().strip('"').strip()
+    return (FREEBUFF_NAME_TAG + txt)[:40] if txt else ""
+
+
+def translate_freebuff(line, live_agents, bootstraps=None):
+    """Map one agenthome Freebuff Desktop thread line to office vocab.
+
+    Accepted only for chat-fb-* thread ids (issue 226 R2): the two catgpt
+    gateways remain the only other agenthome identity (issue 221 S3), and
+    everything else from the agenthome feed is still dropped. Free text is
+    bounded exactly like the openchamber/claude feeds: only the sanitized
+    thread-title label crosses; approval/event detail never does.
+
+    ``bootstraps`` tracks the chat-fb sids this run has already introduced.
+    With START_AT_END, a thread's real session_start harvests before the
+    cursor, so every later line alone would leave the floor's fallback
+    name in place until the next reconnect (issue 221: presence
+    bootstrapping, not invention — the thread demonstrably exists because
+    a pulse for it arrived). On the first non-session_start line for a
+    sid, the adjacent session boundary is emitted so the display name
+    lands with the first pulse.
+    """
+    if not isinstance(line, dict) or "event" not in line:
+        return None, None, None
+    raw_sid = str(line.get("session_id") or "x")
+    if not raw_sid.startswith(FREEBUFF_SID_PREFIX):
+        return None, None, None
+    event = line.get("event")
+    if event not in FREEBUFF_EVENTS:
+        return None, None, None
+    line = dict(line)
+    line["label"] = freebuff_display_name(line.get("label"))
+    rest_env, key, sid = translate_vocab(line, "fb", "fb-", live_agents)
+    if not rest_env:
+        return None, key, sid
+    rest = rest_env if isinstance(rest_env, list) else [rest_env]
+    if bootstraps is None or bootstraps.get(raw_sid) or event == "session_start":
+        if bootstraps is not None:
+            bootstraps[raw_sid] = True
+        return rest_env, key, sid
+    # First non-session_start pulse for this sid this run: prepend the
+    # adjacent session boundary so the display name lands immediately.
+    bootstraps[raw_sid] = True
+    boot_env, _, _ = translate_vocab(
+        {"session_id": raw_sid, "event": "session_start",
+         "ts": line.get("ts"), "label": line.get("label"),
+         "platform": line.get("platform")},
+        "fb", "fb-", live_agents)
+    if not boot_env:
+        return rest_env, key, sid
+    return [boot_env] + rest, key, sid
+
+
 def _newest_mtime(paths):
     """Newest mtime among files/dirs (one level deep, bounded, read-only)."""
     newest = 0.0
@@ -570,6 +649,9 @@ def run_once(state):
                 env, key, sid = translate_kit(item, live)
             elif source == "ag":
                 env, key, sid = translate_gateway(item, set(state.get("gateways", {})))
+                if env is None and key is None:
+                    env, key, sid = translate_freebuff(
+                        item, live_agents, state.setdefault("fbb", {}))
             else:
                 prefix = "oc-" if source == "oc" else "fb-"
                 env, key, sid = translate_vocab(item, source, prefix, live_agents)
@@ -713,7 +795,45 @@ def selftest():
                  "ts": 1790831909.0, "event": "tool_start"}
         envX, keyX, sidX = translate_gateway(other)
         assert envX is None and keyX is None and sidX is None, (sid, envX, keyX, sidX)
-    print("selftest: 6 groups OK")
+    # --- Freebuff Desktop threads (issue 226 R2) --------------------------
+    fb = {"session_id": "chat-fb-42a6f8ae", "platform": "freebuff",
+          "ts": 1792732511.0, "event": "session_start",
+          "label": 'Buffy CHAT - "Did sol sign off on all five changes?"',
+          "detail": "SECRET-DETAIL", "preview": "SECRET-PREVIEW"}
+    fbe, fkey, fbsid = translate_freebuff(fb, {})
+    assert fbe is not None and fbe["event_type"] == "session_start", fbe
+    assert fbsid == "fb-chat-fb-42a6f8ae", fbsid
+    assert fbe["data"].get("display_name", "").startswith("Buffy: "), fbe
+    assert "SECRET" not in json.dumps(fbe), fbe
+    fb2 = {"session_id": "chat-fb-42a6f8ae", "platform": "freebuff",
+           "ts": 1792732515.0, "event": "tool_start", "tool_name": "chat",
+           "activity": "working", "detail": "SECRET", "preview": "SECRET-CMD",
+           "label": "Buffy CHAT - \"1 additional directive =...\""}
+    boots = {}
+    fbe2, _, fbsid2 = translate_freebuff(fb2, {"chat-fb-42a6f8ae": fbsid}, boots)
+    # first pulse bootstraps the adjacent session boundary (START_AT_END)
+    assert isinstance(fbe2, list) and len(fbe2) == 2, fbe2
+    assert [e["event_type"] for e in fbe2] == ["session_start", "pre_tool_use"], fbe2
+    name_now = fbe2[0]["data"].get("display_name", "")
+    assert name_now.startswith("Buffy: 1 additional directive =") and len(name_now) <= 40, name_now
+    assert fbsid2 == fbsid, fbsid2
+    assert boots["chat-fb-42a6f8ae"], boots
+    fbe2b, _, _ = translate_freebuff(
+        dict(fb2, ts=1792732517.0), {"chat-fb-42a6f8ae": fbsid}, boots)
+    assert fbe2b["event_type"] == "pre_tool_use", fbe2b
+    assert "SECRET" not in json.dumps(fbe2b), fbe2b
+    fb3 = dict(fb2, ts=1792732516.0, event="approval_request")
+    fbe3, _, _ = translate_freebuff(fb3, {"chat-fb-42a6f8ae": fbsid})
+    assert fbe3 is not None and fbe3["event_type"] == "permission_request", fbe3
+    assert "SECRET" not in json.dumps(fbe3), fbe3
+    # openchamber and unknown-event agenthome lines stay out
+    for bad in ({"session_id": "ses_e99217233ffe4Qm1Aff6", "platform": "openchamber",
+                 "ts": 1792734000.0, "event": "session_start"},
+                {"session_id": "chat-fb-x", "platform": "freebuff",
+                 "ts": 1792734001.0, "event": "custom_ping"}):
+        fbx, fkx, fsx = translate_freebuff(bad, {})
+        assert fbx is None and fkx is None and fsx is None, (bad, fbx)
+    print("selftest: 7 groups OK")
     return 0
 
 
@@ -722,6 +842,10 @@ def main(argv):
         return selftest()
     once = "--once" in argv
     state = load_state()
+    # The sid bootstrap checkpoints are per process run: a restart with a
+    # saved "fbb" map must not suppress the next run's adjacent session
+    # boundary (the display name would stay whatever the office restored).
+    state["fbb"] = {}
     if once:
         posted, _, failed = run_once(state)
         save_state(state)
